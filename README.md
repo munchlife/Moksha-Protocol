@@ -12,7 +12,7 @@ The **Moksha Protocol** is a karmic-based economic framework designed to facilit
 
 In the **Moksha Protocol**, **karma** functions as a dynamic currency that represents the **energy flow** resulting from an individual’s actions, thoughts, and intentions. Unlike traditional currencies, which are based on material wealth or labor, **karmic currency** is inherently spiritual, rooted in the consequences of aligning one’s actions with **dharma**(righteousness) or deviating into **adharma** (unrighteousness).
 
-Karma in the protocol is quantified into **credit and debt units**, awarded or deducted every 24 hours based on an individual’s influence on the energetic state of others. The core principle is simple: every action, thought, or intention either contributes to or hinders another person’s **spiritual progress**, as measured by the opening or closing of their **chakras**.
+Karma in the protocol is quantified into **credit and debt units**, awarded or deducted every hour starting from the time the karmic interaction is reported based on an individual’s influence on the energetic state of others. The core principle is simple: every action, thought, or intention either contributes to or hinders another person’s **spiritual progress**, as measured by the opening or closing of their **chakras**.
 
 **Currency Dynamics:**
 

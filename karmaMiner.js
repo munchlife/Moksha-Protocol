@@ -13,7 +13,7 @@ const destructiveChakras = {
 };
 
 async function mineKarma() {
-    console.log('⏳ Running daily karma job...');
+    console.log('⏳ Running hourly karma job...');
     try {
         const karmaBalances = await KarmaBalance.findAll();
         console.log('Karma balances fetched:', karmaBalances.length);
@@ -24,9 +24,9 @@ async function mineKarma() {
 
             const now = new Date();
             const createdAt = new Date(timestamp);
-            const msInDay = 1000 * 60 * 60 * 24;
-            const daysOutstanding = Math.floor((now - createdAt) / msInDay);
-            if (daysOutstanding < 1) continue; // Skip if less than a day old
+            const msInHour = 1000 * 60 * 60; // Milliseconds in an hour
+            const hoursOutstanding = Math.floor((now - createdAt) / msInHour);
+            if (hoursOutstanding < 1) continue; // Skip if less than an hour old
 
             let hasDestructive = false;
             for (const [chakra, destructive] of Object.entries(destructiveChakras)) {

@@ -24,7 +24,7 @@ async function startServer() {
         await ChakraProfile.sync({ alter: true });
         console.log('ChakraProfile table synced');
 
-        cron.schedule('0 0 * * *', async () => {
+        cron.schedule('0 * * * *', async () => {
             try {
                 await mineKarma(); // Delegate to karmaMiner.js
             } catch (err) {
