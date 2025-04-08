@@ -1,7 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database/database');
 const LifeAccount = require('../database/LifeAccount');
-const KarmaBalance = require('../database/KarmaBalance');
 
 const ChakraProfile = sequelize.define('ChakraProfile', {
     id: {
