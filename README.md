@@ -2,7 +2,7 @@
 
 **Introduction**
 
-**Moksha Protocol: A karmic currency for liberating life from samsara by incentivizing the opening of chakras through a collective kundalini awakening driven by a realization of maya and a shift toward dharma.**
+**Moksha Protocol: A karmic currency for liberating life from samsara by incentivizing the opening of chakras through a collective kundalini awakening driven by a realization of maya and a shift from adharma to dharma.**
 
 The **Moksha Protocol** is a karmic-based economic framework designed to facilitate spiritual liberation from the cycle of birth, death, and rebirth (samsara). The protocol aims to incentivize the opening of chakras and the collective awakening of kundalini through a deep realization of the illusory nature of the material world (maya) and a conscious shift toward righteous living (dharma). By harnessing the principles of karma, spiritual growth, and universal energy systems, the Moksha Protocol seeks to create a system that not only transforms individuals but collectively elevates humanity into a state of greater alignment and awareness.
 
