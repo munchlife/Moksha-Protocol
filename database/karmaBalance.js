@@ -61,17 +61,17 @@ const KarmaBalance = sequelize.define('KarmaBalance', {
     },
     positiveKarma: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         defaultValue: 0,
     },
     negativeKarma: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         defaultValue: 0,
     },
     netKarma: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         defaultValue: 0,
     },
     timestamp: {

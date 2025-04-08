@@ -18,14 +18,45 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 });
 
-// GET: Get a specific Life record by lifeId
-router.get('/:id', authenticateToken, async (req, res) => {
+// GET: Get a specific Life record by lifeId with Karma balance
+router.get('/:lifeId', authenticateToken, async (req, res) => {
     try {
-        const life = await LifeAccount.findByPk(req.params.id);
+        // Fetch the life account with its associated KarmaBalance
+        const life = await LifeAccount.findOne({
+            where: { lifeId: req.params.id },
+            include: [{
+                model: KarmaBalance,
+                where: { lifeId: req.params.id },
+                required: true // Ensures Life records must have a KarmaBalance
+            }]
+        });
+
         if (!life) {
             return res.status(404).json({ error: 'Life not found' });
         }
-        return res.json(life);
+
+        // Extract Karma data from KarmaBalance (singular, as per model name)
+        const karmaData = life.KarmaBalance[0]; // Corrected from KarmaBalances
+
+        // Return structured response with Life and Karma data
+        const lifeData = {
+            lifeId: life.lifeId,
+            firstName: life.firstName,
+            lastName: life.lastName,
+            email: life.email,
+            influencerEmail: life.influencerEmail,
+            passcode: life.passcode, // Consider masking or omitting for security
+            passcodeExpiresAt: life.passcodeExpiresAt,
+            registered: life.registered,
+            timestamp: life.timestamp,
+            karmaBalance: {
+                positiveKarma: karmaData.positiveKarma,
+                negativeKarma: karmaData.negativeKarma,
+                netKarma: karmaData.netKarma,
+            }
+        };
+
+        return res.json(lifeData);
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: 'Server error' });
