@@ -44,8 +44,4 @@ const ChakraProfile = sequelize.define('ChakraProfile', {
     timestamps: false
 });
 
-// // Associations
-// ChakraProfile.belongsTo(LifeAccount, { foreignKey: 'lifeId' });
-// ChakraProfile.hasMany(KarmaBalance, { foreignKey: 'chakra', sourceKey: 'chakra' });
-
 module.exports = ChakraProfile;

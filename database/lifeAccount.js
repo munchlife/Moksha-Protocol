@@ -10,11 +10,11 @@ const LifeAccount = sequelize.define('LifeAccount', {
     },
     firstName: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
     },
     lastName: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
     },
     email: {
         type: DataTypes.STRING,
@@ -38,6 +38,11 @@ const LifeAccount = sequelize.define('LifeAccount', {
         type: DataTypes.STRING,
         allowNull: true,
         unique: true,
+    },
+    influencerHandle: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: false // optional: only make it unique if you expect no duplicates across platforms
     },
     timestamp: {
         type: DataTypes.DATE,

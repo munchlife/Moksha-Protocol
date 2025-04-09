@@ -3,6 +3,7 @@ const express = require('express');
 const cron = require('node-cron');
 const { LifeAccount, KarmaBalance, ChakraProfile } = require('./database/associations.js');
 const { mineKarma } = require('./karmaMiner.js'); // Import karma miner
+const { karmaScaler } = require('./karmaVirality.js'); // Import karmaScaler function
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -24,11 +25,24 @@ async function startServer() {
         await ChakraProfile.sync({ alter: true });
         console.log('ChakraProfile table synced');
 
+        // Cron job for karma mining (runs every hour)
         cron.schedule('0 * * * *', async () => {
             try {
                 await mineKarma(); // Delegate to karmaMiner.js
             } catch (err) {
-                // Error already logged in mineKarma; optional additional handling here
+                console.error('Error while mining karma:', err);
+            }
+        });
+
+        // Cron job for karmaScaler (send reminders for unresolved negative karma every 28 days)
+        cron.schedule('0 0 * * 0', async () => { // Runs every Sunday at midnight
+            try {
+                // Assuming `influencerLifeId` and `chakraType` are dynamic or fetched based on logic
+                const influencerLifeId = 1;  // Example influencerLifeId, adjust as needed
+                const chakraType = 'root';  // Example chakra type, adjust as needed
+                await karmaScaler(influencerLifeId, chakraType); // Send karma reminder for unresolved negative karma
+            } catch (err) {
+                console.error('Error while scaling karma:', err);
             }
         });
 

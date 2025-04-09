@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const LifeAccount = require('../database/lifeAccount.js'); // Life
-const KarmaBalance = require('../database/karmaBalance.js');
-const ChakraProfile = require('../database/ChakraProfile');
+const { LifeAccount, ChakraProfile, KarmaBalance, KarmaInteraction } = require('../database/associations.js');
 const sequelize = require('../database/database.js');
+const karmaTagger = require('../karmaVirality.js')
 const authenticateToken = require('../middlewares/authenticateToken'); // Centralized middleware
 const verifyLifeId = require('../middlewares/verifyLifeId'); // Centralized middleware
 
@@ -45,6 +44,7 @@ router.get('/:lifeId', authenticateToken, async (req, res) => {
             lastName: life.lastName,
             email: life.email,
             influencerEmail: life.influencerEmail,
+            influencerHandle: life.influencerHandle,
             passcode: life.passcode, // Consider masking or omitting for security
             passcodeExpiresAt: life.passcodeExpiresAt,
             registered: life.registered,
@@ -65,7 +65,14 @@ router.get('/:lifeId', authenticateToken, async (req, res) => {
 
 router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (req, res) => {
     try {
-        const { lifeId, chakraBalance, influencerEmail } = req.body;
+        const {
+            lifeId,
+            chakraBalance,
+            influencerEmail,
+            influencerHandle,
+            influencerFirstName,
+            influencerLastName
+        } = req.body;
 
         if (!lifeId || !chakraBalance) {
             return res.status(400).json({ error: 'lifeId and chakraBalance are required' });
@@ -81,11 +88,12 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
             return res.status(400).json({ error: 'No karma balance found for this lifeId.' });
         }
 
-        // STEP 2: Calculate netKarma based on positiveKarma and negativeKarma
+        // STEP 2: Calculate netKarma
         const latestNetKarma = latestKarma.positiveKarma - latestKarma.negativeKarma;
 
-        // If there's an influencer email, check karma status
-        if (influencerEmail && latestNetKarma <= 0) {
+        // STEP 3: Validate karma before applying positive influence
+        const isPositiveInfluence = Object.values(chakraBalance).some(val => val > 0);
+        if ((influencerEmail || influencerHandle) && isPositiveInfluence && latestNetKarma <= 0) {
             return res.status(403).json({
                 error: "Invalid attempt to declare someone as positively influencing you. You need to burn your negative karma first."
             });
@@ -93,27 +101,40 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
 
         let influencerLifeId = null;
 
-        // STEP 3: Resolve or create influencer
-        if (influencerEmail) {
+        // STEP 4: Resolve or create influencer
+        if (influencerEmail || influencerHandle) {
             const influencer = await LifeAccount.findOne({
-                where: { email: influencerEmail }
+                where: {
+                    ...(influencerEmail && { email: influencerEmail }),
+                    ...(influencerHandle && { influencerHandle }),
+                    firstName: influencerFirstName,
+                    lastName: influencerLastName
+                }
             });
 
             if (influencer) {
                 influencerLifeId = influencer.lifeId;
             } else {
+                if (!influencerFirstName || !influencerLastName) {
+                    return res.status(400).json({
+                        error: "Influencer not found and firstName + lastName are required to create a new one."
+                    });
+                }
+
                 const newInfluencer = await LifeAccount.create({
-                    email: influencerEmail,
-                    firstName: 'Unknown',
-                    lastName: 'Unknown',
+                    email: influencerEmail || null,
+                    influencerHandle: influencerHandle || null,
+                    firstName: influencerFirstName,
+                    lastName: influencerLastName,
                     registered: false,
-                    timestamp: new Date(),
+                    timestamp: new Date()
                 });
+
                 influencerLifeId = newInfluencer.lifeId;
             }
         }
 
-        // STEP 4: Record karma balance entry
+        // STEP 5: Record karma balance entry
         const latestLifeChakraBalanceEntries = await KarmaBalance.findAll({
             where: { lifeId },
             order: [['timestamp', 'DESC']],
@@ -137,7 +158,19 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
             });
         }
 
-        // STEP 5: Update ChakraProfile entries
+        // STEP 6: Record Karma Interaction
+        if (influencerLifeId) {
+            await KarmaInteraction.create({
+                influencerLifeId,          // LifeId of the person influencing
+                affectedLifeId: lifeId,    // LifeId of the affected person (the user whose chakra balance is being updated)
+                karmaType: isPositiveInfluence ? 'positive' : 'negative',  // You can decide this based on chakraBalance or other logic
+                timestamp: new Date()
+            });
+
+            await karmaTagger(influencerLifeId, lifeId, 'chakra', latestEntry);  // Assuming 'chakra' is the chakraType and karma entry is the latest
+        }
+
+        // STEP 7: Update ChakraProfile entries
         for (const chakra in chakraBalance) {
             const balance = chakraBalance[chakra];
 
@@ -169,7 +202,6 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
                 if (wasClosed) {
                     updatedClosedBy = updatedClosedBy.filter(id => id !== influencerLifeId);
 
-                    // Burn negative karma for this chakra and influencer
                     const allNegativeChakraBalances = await KarmaBalance.findAll({
                         where: {
                             lifeId,
@@ -202,7 +234,7 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
             lifeId: latestEntry.lifeId,
             influencerLifeId,
             chakraBalance: latestEntry,
-            latestNetKarma // Include the calculated latestNetKarma in the response
+            latestNetKarma
         });
 
     } catch (error) {
