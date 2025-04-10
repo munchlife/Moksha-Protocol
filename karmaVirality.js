@@ -29,7 +29,7 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaAm
         }
 
         // Update the message to come from the affectedLife (not influencerLife)
-        const message = `${affectedLife.firstName} ${affectedLife.lastName} tagged you as putting ${chakraProfile[chakraType]} in your ${chakraType} chakra, and you started earning ${karmaAmount > 0 ? 'positive' : 'negative'} karma.`;
+        const message = `${affectedLife.firstName} ${affectedLife.lastName} tagged you as putting ${chakraProfile[chakraType]} in your ${chakraType} chakra using the Moksha Protocol, and you started earning ${karmaAmount > 0 ? 'positive' : 'negative'} karma.`;
 
         const body = `Join now at https://moksha.money to begin working through your karma.`;
 
@@ -96,7 +96,7 @@ const karmaScaler = async (influencerLifeId, chakraType) => {
                 return { error: `Affected life not found for lifeId: ${affectedLifeId}` };
             }
 
-            const message = `Reminder: you have ${Math.abs(karmaAmount)} outstanding karma with ${affectedLifeId}. Would you like to resolve it?`;
+            const message = `Reminder: you have ${Math.abs(karmaAmount)} outstanding karma with ${affectedLifeId}. Would you like to resolve it using the Moksha Protocol?`;
             const body = 'Join now at https://moksha.money to resolve your negative karma.';
 
             // Send reminder email to influencerLife

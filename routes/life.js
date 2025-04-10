@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { LifeAccount, ChakraProfile, KarmaBalance, KarmaInteraction } = require('../database/associations.js');
 const sequelize = require('../database/database.js');
+const { Op } = require('sequelize');
 const karmaTagger = require('../karmaVirality.js')
 const authenticateToken = require('../middlewares/authenticateToken'); // Centralized middleware
 const verifyLifeId = require('../middlewares/verifyLifeId'); // Centralized middleware
@@ -63,6 +64,161 @@ router.get('/:lifeId', authenticateToken, async (req, res) => {
     }
 });
 
+// GET: Get activity feed for a given lifeId
+router.get('/activity-feed/:lifeId', async (req, res) => {
+    try {
+        const { lifeId } = req.params;
+
+        // Get ChakraProfiles where this life is listed in openedBy or closedBy
+        const chakraProfiles = await ChakraProfile.findAll({
+            where: {
+                [sequelize.Op.or]: [
+                    sequelize.json('openedBy').contains([lifeId]),
+                    sequelize.json('closedBy').contains([lifeId])
+                ]
+            },
+            attributes: ['lifeId', 'chakra', 'openedBy', 'closedBy']
+        });
+
+        const openingForOthers = [];
+        const closingForOthers = [];
+
+        chakraProfiles.forEach(profile => {
+            const { lifeId: targetLifeId, chakra, openedBy, closedBy } = profile;
+
+            if (openedBy?.includes(lifeId)) {
+                openingForOthers.push({ chakra, targetLifeId });
+            }
+            if (closedBy?.includes(lifeId)) {
+                closingForOthers.push({ chakra, targetLifeId });
+            }
+        });
+
+        // Fetch ChakraProfiles where others are opening or closing this life’s chakras
+        const receivedChakraProfiles = await ChakraProfile.findAll({
+            where: { lifeId },
+            attributes: ['chakra', 'openedBy', 'closedBy']
+        });
+
+        const othersOpeningMyChakras = [];
+        const othersClosingMyChakras = [];
+
+        receivedChakraProfiles.forEach(profile => {
+            const { chakra, openedBy, closedBy } = profile;
+            if (openedBy && openedBy.length > 0) {
+                openedBy.forEach(openerId => {
+                    othersOpeningMyChakras.push({ chakra, openerId });
+                });
+            }
+            if (closedBy && closedBy.length > 0) {
+                closedBy.forEach(closerId => {
+                    othersClosingMyChakras.push({ chakra, closerId });
+                });
+            }
+        });
+
+        // Fetch karma interactions this life has performed on others
+        const karmaGiven = await KarmaInteraction.findAll({
+            where: { influencerLifeId: lifeId },
+            attributes: ['affectedLifeId', 'karmaType', 'timestamp']
+        });
+
+        // Fetch karma interactions others have performed on this life
+        const karmaReceived = await KarmaInteraction.findAll({
+            where: { affectedLifeId: lifeId },
+            attributes: ['influencerLifeId', 'karmaType', 'timestamp']
+        });
+
+        return res.json({
+            lifeId,
+            activityFeed: {
+                chakrasOpenedForOthers: openingForOthers,
+                chakrasClosedForOthers: closingForOthers,
+                chakrasOpenedByOthers: othersOpeningMyChakras,
+                chakrasClosedByOthers: othersClosingMyChakras,
+                karmaGiven,
+                karmaReceived
+            }
+        });
+    } catch (err) {
+        console.error('Error in GET /activity-feed/:lifeId:', err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET: Get global activity feed
+router.get('/global-activity-feed', async (req, res) => {
+    try {
+        // Get ChakraProfiles where anyone has opened or closed chakras
+        const chakraProfiles = await ChakraProfile.findAll({
+            where: {
+                [sequelize.Op.or]: [
+                    sequelize.json('openedBy').isNotNull(),
+                    sequelize.json('closedBy').isNotNull()
+                ]
+            },
+            attributes: ['lifeId', 'chakra', 'openedBy', 'closedBy']
+        });
+
+        const globalChakraActivity = [];
+
+        chakraProfiles.forEach(profile => {
+            const { lifeId: targetLifeId, chakra, openedBy, closedBy } = profile;
+
+            if (openedBy) {
+                openedBy.forEach(openerId => {
+                    globalChakraActivity.push({
+                        action: 'opened',
+                        chakra,
+                        targetLifeId,
+                        openerId
+                    });
+                });
+            }
+
+            if (closedBy) {
+                closedBy.forEach(closerId => {
+                    globalChakraActivity.push({
+                        action: 'closed',
+                        chakra,
+                        targetLifeId,
+                        closerId
+                    });
+                });
+            }
+        });
+
+        // Fetch karma interactions from all lives
+        const karmaInteractions = await KarmaInteraction.findAll({
+            attributes: ['influencerLifeId', 'affectedLifeId', 'karmaType', 'timestamp']
+        });
+
+        const globalKarmaActivity = [];
+
+        karmaInteractions.forEach(interaction => {
+            const { influencerLifeId, affectedLifeId, karmaType, timestamp } = interaction;
+
+            globalKarmaActivity.push({
+                influencerLifeId,
+                affectedLifeId,
+                karmaType,
+                timestamp
+            });
+        });
+
+        return res.json({
+            activityFeed: {
+                globalChakraActivity,
+                globalKarmaActivity
+            }
+        });
+    } catch (err) {
+        console.error('Error in GET /global-activity-feed:', err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST: Update a chakra balance for a life
 router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (req, res) => {
     try {
         const {
@@ -239,166 +395,6 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (re
 
     } catch (error) {
         console.error('Error in /update-chakra-balance:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-router.get('/chakra-profile/:lifeId', authenticateToken, verifyLifeId, async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profile = await LifeAccount.findOne({
-            where: { lifeId },
-            attributes: ['lifeId', 'firstName', 'lastName', 'email'],
-            include: [{
-                model: ChakraProfile,
-                attributes: ['chakra', 'openedBy', 'closedBy']
-            }]
-        });
-
-        if (!profile) {
-            return res.status(404).json({ error: 'Profile not found' });
-        }
-
-        res.status(200).json(profile);
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get which chakras this life is opening for others
-router.get('/chakra-profile/:lifeId/opening', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('openedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, opening: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/opening:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get which chakras this life is closing for others
-router.get('/chakra-profile/:lifeId/closing', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('closedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, closing: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/closing:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get whose chakras this life is closing (others closing this life’s chakras)
-router.get('/chakra-profile/:lifeId/closing-others', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('closedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, closingOthers: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/closing-others:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get whose chakras this life is opening (others opening this life’s chakras)
-router.get('/chakra-profile/:lifeId/opening-others', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('openedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, openingOthers: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/opening-others:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get which chakras this life is opening for others (life X)
-router.get('/chakra-profile/:lifeId/opening-x', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('openedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, openingX: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/opening-x:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get which chakras this life is closing for others (life X)
-router.get('/chakra-profile/:lifeId/closing-x', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('closedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, closingX: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/closing-x:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get whose chakras life X is closing (others closing life X’s chakras)
-router.get('/chakra-profile/:lifeId/closing-others-x', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('closedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, closingOthersX: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/closing-others-x:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Get whose chakras life X is opening (others opening life X’s chakras)
-router.get('/chakra-profile/:lifeId/opening-others-x', async (req, res) => {
-    try {
-        const { lifeId } = req.params;
-
-        const profiles = await ChakraProfile.findAll({
-            where: sequelize.json('openedBy').contains([lifeId]),
-            attributes: ['lifeId', 'chakra']
-        });
-
-        res.status(200).json({ lifeId, openingOthersX: profiles });
-    } catch (error) {
-        console.error('Error in GET /chakra-profile/:lifeId/opening-others-x:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
