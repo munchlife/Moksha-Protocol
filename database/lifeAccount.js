@@ -34,16 +34,6 @@ const LifeAccount = sequelize.define('LifeAccount', {
         allowNull: false,
         defaultValue: false,
     },
-    influencerEmail: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        unique: true,
-    },
-    influencerHandle: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        unique: false // optional: only make it unique if you expect no duplicates across platforms
-    },
     timestamp: {
         type: DataTypes.DATE,
         allowNull: true,
