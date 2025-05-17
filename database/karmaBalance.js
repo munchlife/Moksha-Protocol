@@ -1,16 +1,9 @@
+// models/karmaBalance.js
+
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database/database.js');
 const LifeAccount = require('./lifeAccount.js');
-
-const chakraBalances = {
-    "Muladhara": ["Fear", "Groundedness"],
-    "Svadhisthana": ["Shame", "Joy"],
-    "Manipura": ["Powerlessness", "Autonomy"],
-    "Anahata": ["Grief", "Gratitude"],
-    "Vishuddhi": ["Censorship", "Vocality"],
-    "Ajna": ["Illusion", "Insight"],
-    "Sahasrara": ["Division", "Connectedness"]
-};
+const { chakraEnumMap } = require('../chakraBalances.js');
 
 const KarmaBalance = sequelize.define('KarmaBalance', {
     karmaBalanceId: {
@@ -23,7 +16,7 @@ const KarmaBalance = sequelize.define('KarmaBalance', {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: LifeAccount, // Use the model object
+            model: LifeAccount,
             key: 'lifeId'
         }
     },
@@ -32,31 +25,31 @@ const KarmaBalance = sequelize.define('KarmaBalance', {
         allowNull: true,
     },
     muladharaBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Muladhara"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Muladhara),
         allowNull: true,
     },
     svadhisthanaBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Svadhisthana"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Svadhisthana),
         allowNull: true,
     },
     manipuraBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Manipura"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Manipura),
         allowNull: true,
     },
     anahataBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Anahata"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Anahata),
         allowNull: true,
     },
     vishuddhiBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Vishuddhi"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Vishuddhi),
         allowNull: true,
     },
     ajnaBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Ajna"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Ajna),
         allowNull: true,
     },
     sahasraraBalance: {
-        type: DataTypes.ENUM(...chakraBalances["Sahasrara"]),
+        type: DataTypes.ENUM(...chakraEnumMap.Sahasrara),
         allowNull: true,
     },
     positiveKarma: {
@@ -74,12 +67,16 @@ const KarmaBalance = sequelize.define('KarmaBalance', {
         allowNull: true,
         defaultValue: 0,
     },
+    note: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
     timestamp: {
         type: DataTypes.DATE,
         allowNull: true,
     }
 }, {
-    tableName: 'KarmaBalances', // Explicitly set
+    tableName: 'KarmaBalances',
 });
 
 module.exports = KarmaBalance;

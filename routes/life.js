@@ -3,7 +3,8 @@ const router = express.Router();
 const { LifeAccount, ChakraProfile, KarmaBalance, KarmaInteraction } = require('../database/associations.js');
 const sequelize = require('../database/database.js');
 const { Op } = require('sequelize');
-const karmaTagger = require('../karmaVirality.js')
+const karmaTagger = require('../karmaVirality.js');
+const { chakraBalances } = require('../chakraBalances.js');
 const authenticateToken = require('../middlewares/authenticateToken'); // Centralized middleware
 const verifyLifeId = require('../middlewares/verifyLifeId'); // Centralized middleware
 
@@ -63,17 +64,6 @@ router.get('/:lifeId', authenticateToken, async (req, res) => {
     }
 });
 
-// Define chakra feelings (mirroring home.html)
-const feelings = {
-    Muladhara: ['Fear', 'Groundedness'],
-    Svadhisthana: ['Shame', 'Joy'],
-    Manipura: ['Powerlessness', 'Autonomy'],
-    Anahata: ['Grief', 'Gratitude'],
-    Vishuddhi: ['Censorship', 'Vocality'],
-    Ajna: ['Illusion', 'Insight'],
-    Sahasrara: ['Division', 'Connectedness']
-};
-
 // GET: Get activity feed for a given lifeId
 router.get('/activity-feed/:lifeId', async (req, res) => {
     try {
@@ -83,7 +73,6 @@ router.get('/activity-feed/:lifeId', async (req, res) => {
             return res.status(400).json({ error: 'lifeId must be a valid integer' });
         }
 
-        // Fetch karma interactions where this life is influencer or affected
         const interactions = await KarmaInteraction.findAll({
             where: {
                 [sequelize.Op.or]: [
@@ -107,41 +96,51 @@ router.get('/activity-feed/:lifeId', async (req, res) => {
             limit: 50
         });
 
-        // Build ledger entries
+        const chakraKeys = Object.keys(chakraBalances);
         const ledger = [];
+
         for (const interaction of interactions) {
             const sender = interaction.influencer;
             const receiver = interaction.affected;
             if (!sender || !receiver) continue;
 
-            // Fetch latest KarmaBalance for affected life
             const karmaBalance = await KarmaBalance.findOne({
                 where: { lifeId: interaction.affectedLifeId },
                 order: [['timestamp', 'DESC']]
             });
 
-            // Select chakra and feeling
-            const chakraKeys = Object.keys(feelings);
-            let chakra, feeling;
+            let chakra, chakraBalanceState;
+
             if (karmaBalance) {
-                // Find a chakra with a non-null state
-                chakra = chakraKeys.find(key => karmaBalance[`${key.toLowerCase()}Balance`]) || chakraKeys[Math.floor(Math.random() * chakraKeys.length)];
-                const chakraState = karmaBalance[`${chakra.toLowerCase()}Balance`];
-                feeling = chakraState && feelings[chakra].includes(chakraState) ? chakraState : (interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0]);
+                chakra = chakraKeys.find(key => {
+                    const field = `${key.toLowerCase()}Balance`;
+                    return karmaBalance[field] !== null && karmaBalance[field] !== undefined;
+                }) || chakraKeys[Math.floor(Math.random() * chakraKeys.length)];
+
+                const field = `${chakra.toLowerCase()}Balance`;
+                chakraBalanceState = karmaBalance[field];
+
+                // Fallback if the stored state isn't valid (possibly out of sync)
+                if (!chakraBalances[chakra].includes(chakraBalanceState)) {
+                    chakraBalanceState = interaction.karmaType === 'positive'
+                        ? chakraBalances[chakra][1]
+                        : chakraBalances[chakra][0];
+                }
             } else {
                 chakra = chakraKeys[Math.floor(Math.random() * chakraKeys.length)];
-                feeling = interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0];
+                chakraBalanceState = interaction.karmaType === 'positive'
+                    ? chakraBalances[chakra][1]
+                    : chakraBalances[chakra][0];
             }
 
-            // Determine credit or debt using isNegative
-            const isNegative = feelings[chakra].includes(feeling) && feelings[chakra].indexOf(feeling) === 0;
+            const isNegative = chakraBalanceState === chakraBalances[chakra][0];
             const creditOrDebt = isNegative ? 'debt' : 'credit';
 
             ledger.push({
                 senderEmail: sender.email,
                 receiverEmail: receiver.email,
                 chakra,
-                feeling,
+                chakraBalance: chakraBalanceState,
                 creditOrDebt,
                 timestamp: interaction.timestamp,
                 link: `/karmaledgerentry/${interaction.id}`
@@ -191,59 +190,91 @@ router.get('/global-activity-feed', async (req, res) => {
                 order: [['timestamp', 'DESC']]
             });
 
-            // Select chakra and feeling
+            // Select chakra and chakraBalance (formerly "feeling")
             const chakraKeys = Object.keys(feelings);
-            let chakra, feeling;
+            let chakra, chakraBalance;
             if (karmaBalance) {
-                // Find a chakra with a non-null state
                 chakra = chakraKeys.find(key => karmaBalance[`${key.toLowerCase()}Balance`]) || chakraKeys[Math.floor(Math.random() * chakraKeys.length)];
                 const chakraState = karmaBalance[`${chakra.toLowerCase()}Balance`];
-                feeling = chakraState && feelings[chakra].includes(chakraState) ? chakraState : (interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0]);
+                chakraBalance = chakraState && feelings[chakra].includes(chakraState)
+                    ? chakraState
+                    : (interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0]);
             } else {
                 chakra = chakraKeys[Math.floor(Math.random() * chakraKeys.length)];
-                feeling = interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0];
+                chakraBalance = interaction.karmaType === 'positive' ? feelings[chakra][1] : feelings[chakra][0];
             }
 
             // Determine credit or debt
-            const isNegative = feelings[chakra].includes(feeling) && feelings[chakra].indexOf(feeling) === 0;
+            const isNegative = feelings[chakra].includes(chakraBalance) && feelings[chakra].indexOf(chakraBalance) === 0;
             const creditOrDebt = isNegative ? 'debt' : 'credit';
 
             ledger.push({
                 senderEmail: sender.email,
                 receiverEmail: receiver.email,
                 chakra,
-                feeling,
+                chakraBalance,
                 creditOrDebt,
                 timestamp: interaction.timestamp,
                 link: `/karmaledgerentry/${interaction.id}`
             });
         }
 
-        return res.json({
-            ledger
-        });
+        return res.json({ ledger });
     } catch (err) {
         return res.status(500).json({ error: err.message || 'Server error' });
     }
 });
 
 // POST: Update a chakra balance for a life
-router.post('/update-chakra-balance-simple', authenticateToken, verifyLifeId, async (req, res) => {
+router.post('/update-chakra-balance', authenticateToken, verifyLifeId, async (req, res) => {
     try {
         const {
             lifeId,
+            chakra,
             chakraBalance,
             influencerEmail,
             influencerFirstName,
-            influencerLastName
+            influencerLastName,
+            note
         } = req.body;
 
-        if (!lifeId || !chakraBalance) {
-            return res.status(400).json({ error: 'lifeId and chakraBalance are required' });
+        if (!lifeId || !chakra || !chakraBalance) {
+            return res.status(400).json({ error: 'lifeId, chakra, and chakraBalance are required' });
         }
 
+        if (!chakraBalances[chakra]) {
+            return res.status(400).json({ error: 'chakra must be a valid chakra name' });
+        }
+
+        const { positive, negative } = chakraBalances[chakra];
+        let balanceDirection = null;
+
+        if (chakraBalance === positive) {
+            balanceDirection = 1;
+        } else if (chakraBalance === negative) {
+            balanceDirection = -1;
+        } else {
+            return res.status(400).json({
+                error: `chakraBalance must be either "${positive}" or "${negative}" for chakra "${chakra}"`
+            });
+        }
+
+        if (note && typeof note !== 'string') {
+            return res.status(400).json({ error: 'Note must be a string' });
+        }
+        if (note && note.length > 10000) {
+            return res.status(400).json({ error: 'Note must be 10,000 characters or less' });
+        }
+
+        const userLifeId = parseInt(lifeId, 10);
+        if (isNaN(userLifeId)) {
+            return res.status(400).json({ error: 'lifeId must be a valid integer' });
+        }
+
+        const chakraUpdate = { [chakra]: chakraBalance };
+
         const latestKarma = await KarmaBalance.findOne({
-            where: { lifeId },
+            where: { lifeId: userLifeId },
             order: [['timestamp', 'DESC']]
         });
 
@@ -251,8 +282,8 @@ router.post('/update-chakra-balance-simple', authenticateToken, verifyLifeId, as
             return res.status(400).json({ error: 'No karma balance found for this lifeId.' });
         }
 
-        const latestNetKarma = latestKarma.positiveKarma - latestKarma.negativeKarma;
-        const isPositiveInfluence = Object.values(chakraBalance).some(val => val > 0);
+        const latestNetKarma = (latestKarma.positiveKarma || 0) - (latestKarma.negativeKarma || 0);
+        const isPositiveInfluence = balanceDirection > 0;
 
         if (influencerEmail && isPositiveInfluence && latestNetKarma <= 0) {
             return res.status(403).json({
@@ -262,7 +293,6 @@ router.post('/update-chakra-balance-simple', authenticateToken, verifyLifeId, as
 
         let influencerLifeId = null;
 
-        // Look up or create influencer based on email
         if (influencerEmail) {
             let influencer = await LifeAccount.findOne({ where: { email: influencerEmail } });
 
@@ -285,95 +315,92 @@ router.post('/update-chakra-balance-simple', authenticateToken, verifyLifeId, as
             influencerLifeId = influencer.lifeId;
         }
 
-        // Create or update chakra balance
         let latestEntry = await KarmaBalance.findOne({
-            where: { lifeId },
+            where: { lifeId: userLifeId },
             order: [['timestamp', 'DESC']]
         });
 
         if (!latestEntry) {
             latestEntry = await KarmaBalance.create({
-                lifeId,
+                lifeId: userLifeId,
                 influencerLifeId,
-                ...chakraBalance,
+                ...chakraUpdate,
+                note,
                 timestamp: new Date()
             });
         } else {
             latestEntry = await latestEntry.update({
                 influencerLifeId,
-                ...chakraBalance,
+                ...chakraUpdate,
+                note,
                 timestamp: new Date()
             });
         }
 
-        // Log karma interaction if influencer is involved
         if (influencerLifeId) {
             await KarmaInteraction.create({
                 influencerLifeId,
-                affectedLifeId: lifeId,
+                affectedLifeId: userLifeId,
                 karmaType: isPositiveInfluence ? 'positive' : 'negative',
                 timestamp: new Date()
             });
 
-            await karmaTagger(influencerLifeId, lifeId, 'chakra', latestEntry);
+            await karmaTagger(influencerLifeId, userLifeId, 'chakra', latestEntry);
         }
 
-        // Update chakra profile for each chakra
-        for (const chakra in chakraBalance) {
-            const balance = chakraBalance[chakra];
+        let chakraProfile = await ChakraProfile.findOne({ where: { lifeId: userLifeId, chakra } });
 
-            let chakraProfile = await ChakraProfile.findOne({ where: { lifeId, chakra } });
-
-            if (!chakraProfile) {
-                chakraProfile = await ChakraProfile.create({
-                    lifeId,
-                    chakra,
-                    openedBy: [],
-                    closedBy: [],
-                    timestamp: new Date()
-                });
-            }
-
-            let updatedOpenedBy = chakraProfile.openedBy || [];
-            let updatedClosedBy = chakraProfile.closedBy || [];
-
-            const wasClosed = updatedClosedBy.includes(influencerLifeId);
-            const wasOpened = updatedOpenedBy.includes(influencerLifeId);
-
-            if (balance > 0 && influencerLifeId) {
-                if (!wasOpened) updatedOpenedBy.push(influencerLifeId);
-                if (wasClosed) {
-                    updatedClosedBy = updatedClosedBy.filter(id => id !== influencerLifeId);
-                    const negativeEntries = await KarmaBalance.findAll({
-                        where: { lifeId, influencerLifeId }
-                    });
-                    for (const entry of negativeEntries) {
-                        if (entry[chakra] < 0) await entry.destroy();
-                    }
-                }
-            } else if (balance < 0 && influencerLifeId) {
-                if (!wasClosed) updatedClosedBy.push(influencerLifeId);
-                updatedOpenedBy = updatedOpenedBy.filter(id => id !== influencerLifeId);
-            }
-
-            await chakraProfile.update({
-                openedBy: updatedOpenedBy,
-                closedBy: updatedClosedBy,
+        if (!chakraProfile) {
+            chakraProfile = await ChakraProfile.create({
+                lifeId: userLifeId,
+                chakra,
+                openedBy: [],
+                closedBy: [],
                 timestamp: new Date()
             });
         }
+
+        let updatedOpenedBy = chakraProfile.openedBy || [];
+        let updatedClosedBy = chakraProfile.closedBy || [];
+
+        const wasClosed = updatedClosedBy.includes(influencerLifeId);
+        const wasOpened = updatedOpenedBy.includes(influencerLifeId);
+
+        if (balanceDirection > 0 && influencerLifeId) {
+            if (!wasOpened) updatedOpenedBy.push(influencerLifeId);
+            if (wasClosed) {
+                updatedClosedBy = updatedClosedBy.filter(id => id !== influencerLifeId);
+                const negativeEntries = await KarmaBalance.findAll({
+                    where: { lifeId: userLifeId, influencerLifeId }
+                });
+                for (const entry of negativeEntries) {
+                    if (chakraBalances[chakra].negative === entry[chakra]) {
+                        await entry.destroy();
+                    }
+                }
+            }
+        } else if (balanceDirection < 0 && influencerLifeId) {
+            if (!wasClosed) updatedClosedBy.push(influencerLifeId);
+            updatedOpenedBy = updatedOpenedBy.filter(id => id !== influencerLifeId);
+        }
+
+        await chakraProfile.update({
+            openedBy: updatedOpenedBy,
+            closedBy: updatedClosedBy,
+            timestamp: new Date()
+        });
 
         res.status(200).json({
             message: 'Chakra balance updated successfully',
             lifeId: latestEntry.lifeId,
             influencerLifeId,
             chakraBalance: latestEntry,
-            latestNetKarma
+            latestNetKarma,
+            note: latestEntry.note
         });
 
     } catch (error) {
-        console.error('Error in /update-chakra-balance-simple:', error);
-        res.status(500).json({ error: 'Server error' });
+        return res.status(500).json({ error: error.message || 'Server error' });
     }
 });
 

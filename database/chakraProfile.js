@@ -18,13 +18,13 @@ const ChakraProfile = sequelize.define('ChakraProfile', {
     },
     chakra: {
         type: DataTypes.ENUM(
-            'muladhara',      // Root
-            'svadhisthana',   // Sacral
-            'manipura',       // Solar Plexus
-            'anahata',        // Heart
-            'vishuddhi',      // Throat
-            'ajna',           // Third Eye
-            'sahasrara'       // Crown
+            'Muladhara',      // Root
+            'Svadhisthana',   // Sacral
+            'Manipura',       // Solar Plexus
+            'Anahata',        // Heart
+            'Vishuddhi',      // Throat
+            'Ajna',           // Third Eye
+            'Sahasrara'       // Crown
         ),
         allowNull: false
     },
@@ -36,12 +36,18 @@ const ChakraProfile = sequelize.define('ChakraProfile', {
         type: DataTypes.JSON,
         defaultValue: []
     },
-    lastUpdated: {
+    timestamp: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
     }
 }, {
-    timestamps: false
+    timestamps: false,
+    indexes: [
+        {
+            unique: true,
+            fields: ['lifeId', 'chakra']
+        }
+    ]
 });
 
 module.exports = ChakraProfile;
