@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Moksha Project - Life Profile Search</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;700&display=swap');
+
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background: linear-gradient(135deg, #4B0082, #808080);
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            overflow-y: auto;
+            width: 100%;
+        }
+
+        /* Container for main content - Centered */
+        .container {
+            padding: 20px;
+            width: 100%;
+            max-width: 1000px;
+            margin-top: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* --- Screen Specific Styles --- */
+        /* Common style for all screen containers */
+        .screen-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            width: 100%;
+            max-width: 500px; /* Consistent width for all screens */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center; /* Center text within screens */
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #FFD700;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: calc(100% - 20px);
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #6A0DAD;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 16px;
+        }
+
+        .search-input::placeholder {
+            color: #ccc;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 250px;
+        }
+
+        .search-button, .back-button, .screen-button { /* Consolidated button styles */
+            padding: 12px 25px;
+            font-size: 18px;
+            background: #4B0082;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .search-button:hover, .back-button:hover, .screen-button:hover {
+            background: #6A0DAD;
+            transform: translateY(-2px);
+        }
+
+        /* Profile List Specific Styles */
+        #profile-results-list {
+            width: 100%;
+            max-width: 450px; /* Adjust width of the list within the screen */
+            margin-top: 20px;
+            margin-bottom: 20px;
+            text-align: left; /* Align text within list items */
+        }
+
+        .profile-list-item {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .profile-list-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .profile-list-item .name {
+            font-weight: bold;
+            font-size: 18px;
+            color: #FFD700;
+        }
+
+        .profile-list-item .email {
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        /* Profile Info and Karma Ledger Display */
+        #profile-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #profile-info h3 {
+            color: #FFD700;
+            margin-bottom: 10px;
+        }
+        #profile-info p {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .ledger-container {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+        }
+
+        .ledger-entry {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            word-break: break-word;
+        }
+
+        .chakra-impact {
+            font-weight: bold;
+            color: white;
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+
+        .entry-timestamp {
+            font-size: 14px;
+            color: #ccc;
+            white-space: nowrap;
+        }
+
+        /* Loading and Error States */
+        .loading {
+            font-size: 16px;
+            color: #FFD700;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .error {
+            font-size: 16px;
+            color: #FF4500;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="search-screen" class="screen-container">
+        <h2>Find a Life Profile</h2>
+        <input type="text" id="search-input" class="search-input" placeholder="Enter First Name + Last Name or Email" />
+        <div class="button-group">
+            <button id="search-button" class="search-button">Search</button>
+            <button id="back-to-home-search-screen" class="back-button" onclick="window.location.href='home.html'">Back to Home</button>
+        </div>
+        <div id="search-error" class="error" style="display: none;"></div>
+        <div id="search-loading" class="loading" style="display: none;">Searching...</div>
+    </div>
+
+    <div id="profile-list-screen" class="screen-container" style="display: none;">
+        <h2>Multiple Profiles Found</h2>
+        <div id="profile-results-list">
+        </div>
+        <div class="button-group">
+            <button id="back-to-search-list-screen" class="screen-button">Back to Search</button>
+            <button id="back-to-home-list-screen" class="back-button" onclick="window.location.href='home.html'">Back to Home</button>
+        </div>
+    </div>
+
+    <div id="specific-profile-screen" class="screen-container" style="display: none;">
+        <div id="profile-info">
+            <h3 id="profile-name"></h3>
+            <p>Email: <span id="profile-email"></span></p>
+        </div>
+
+        <section class="ledger-container">
+            <h2>Karma Ledger for <span id="profile-ledger-name"></span></h2>
+            <div id="ledger-error" class="error" style="display: none;"></div>
+            <div id="ledger-entries"></div>
+            <div id="no-entries" style="display: none; color: #ccc; margin-top: 20px;">No karma ledger entries found for this life.</div>
+            <div id="ledger-loading" class="loading" style="display: none;">Loading activity feed...</div>
+        </section>
+
+        <div class="button-group">
+            <button id="back-to-list-button" class="screen-button" style="display:none;">Back to Search Results</button>
+            <button id="new-search-button" class="screen-button">New Search</button>
+            <button id="back-to-home-specific-screen" class="back-button" onclick="window.location.href='home.html'">Back to Home</button>
+        </div>
+    </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+    // Get references to screen containers
+    const searchScreen = document.getElementById('search-screen');
+    const profileListScreen = document.getElementById('profile-list-screen'); // New screen
+    const specificProfileScreen = document.getElementById('specific-profile-screen'); // Renamed from resultsScreen
+
+    // Elements for Search Screen
+    const searchInput = document.getElementById('search-input');
+    const searchButton = document.getElementById('search-button');
+    const searchErrorDiv = document.getElementById('search-error');
+    const searchLoadingDiv = document.getElementById('search-loading');
+
+    // Elements for Profile List Screen
+    const profileResultsList = document.getElementById('profile-results-list');
+    const backToListSearchScreenButton = document.getElementById('back-to-search-list-screen'); // New button
+
+    // Elements for Specific Profile Info Screen
+    const profileNameSpan = document.getElementById('profile-name');
+    const profileEmailSpan = document.getElementById('profile-email');
+    const profileLedgerNameSpan = document.getElementById('profile-ledger-name');
+    const ledgerErrorDiv = document.getElementById('ledger-error');
+    const ledgerEntriesDiv = document.getElementById('ledger-entries');
+    const noEntriesDiv = document.getElementById('no-entries');
+    const ledgerLoadingDiv = document.getElementById('ledger-loading');
+    const backToListButton = document.getElementById('back-to-list-button'); // New button
+    const newSearchButton = document.getElementById('new-search-button');
+
+    let lastSearchQuery = ''; // Store the last query for "Back to Search Results"
+    let lastSearchResults = []; // Store the list of profiles from the last search
+
+    // Function to show a specific screen and hide others
+    function showScreen(screenId) {
+        searchScreen.style.display = 'none';
+        profileListScreen.style.display = 'none';
+        specificProfileScreen.style.display = 'none';
+
+        if (screenId === 'search') {
+            searchScreen.style.display = 'flex';
+            searchInput.focus();
+            // Clear specific profile data and ledger when going back to search
+            profileNameSpan.textContent = '';
+            profileEmailSpan.textContent = '';
+            profileLedgerNameSpan.textContent = '';
+            ledgerEntriesDiv.innerHTML = '';
+            noEntriesDiv.style.display = 'none';
+            ledgerErrorDiv.style.display = 'none';
+            // Also clear profile list
+            profileResultsList.innerHTML = '';
+            lastSearchResults = []; // Reset stored results
+            lastSearchQuery = ''; // Reset stored query
+        } else if (screenId === 'profile-list') {
+            profileListScreen.style.display = 'flex';
+        } else if (screenId === 'specific-profile') {
+            specificProfileScreen.style.display = 'flex';
+            // Show/hide 'Back to Search Results' button based on previous flow
+            if (lastSearchResults.length > 1) {
+                backToListButton.style.display = 'block'; // Only show if we came from a list
+            } else {
+                backToListButton.style.display = 'none'; // Hide if direct single search
+            }
+        }
+    }
+
+    // Displays the list of profiles
+    function displayProfileList(lives) {
+        profileResultsList.innerHTML = ''; // Clear previous list
+        if (lives.length === 0) {
+            profileResultsList.innerHTML = '<p style="color: #ccc;">No profiles found matching your search.</p>';
+            return;
+        }
+
+        lives.forEach(life => {
+            const div = document.createElement('div');
+            div.classList.add('profile-list-item');
+            div.innerHTML = `
+                <div class="name">${life.firstName} ${life.lastName}</div>
+                <div class="email">${life.email}</div>
+            `;
+            div.onclick = async () => {
+                // When a list item is clicked, display its details
+                await displaySpecificProfile(life);
+                showScreen('specific-profile');
+            };
+            profileResultsList.appendChild(div);
+        });
+    }
+
+    // Populates the specific profile info screen and fetches ledger
+    async function displaySpecificProfile(life) {
+        profileNameSpan.textContent = `${life.firstName} ${life.lastName}`;
+        profileEmailSpan.textContent = life.email;
+        profileLedgerNameSpan.textContent = `${life.firstName} ${life.lastName}`;
+        await fetchLifeActivityFeed(life.lifeId);
+    }
+
+    async function searchLifeProfile(query) {
+        searchErrorDiv.style.display = 'none';
+        searchLoadingDiv.style.display = 'block';
+        lastSearchQuery = query; // Store query for potential back navigation
+
+        if (!query.trim()) {
+            searchErrorDiv.textContent = 'Please enter a name or email to search.';
+            searchErrorDiv.style.display = 'block';
+            searchLoadingDiv.style.display = 'none';
+            return; // No return value, just handle UI
+        }
+
+        try {
+            console.log('Searching for life profile with query:', query);
+            const response = await fetch(`${window.API_BASE_URL}/life/search?query=${encodeURIComponent(query)}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+            console.log('Search result:', result);
+
+            searchLoadingDiv.style.display = 'none';
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to search for life profile.');
+            }
+
+            const lives = result.lives || []; // Backend now always returns 'lives' array
+            lastSearchResults = lives; // Store results for potential back navigation
+
+            if (lives.length === 0) {
+                searchErrorDiv.textContent = 'No matching life profiles found.';
+                searchErrorDiv.style.display = 'block';
+                return; // Stay on search screen with error
+            } else if (lives.length === 1) {
+                // Directly show specific profile if only one result
+                await displaySpecificProfile(lives[0]);
+                showScreen('specific-profile');
+            } else {
+                // Show list of profiles if multiple results
+                displayProfileList(lives);
+                showScreen('profile-list');
+            }
+
+        } catch (error) {
+            console.error('Search life profile error:', error);
+            searchErrorDiv.textContent = error.message || 'Error searching. Please try again.';
+            searchErrorDiv.style.display = 'block';
+            searchLoadingDiv.style.display = 'none';
+        }
+    }
+
+    async function fetchLifeActivityFeed(lifeId) {
+        ledgerLoadingDiv.style.display = 'block';
+        ledgerErrorDiv.style.display = 'none';
+        ledgerEntriesDiv.innerHTML = '';
+        noEntriesDiv.style.display = 'none';
+
+        try {
+            console.log('Fetching activity feed for lifeId:', lifeId);
+            const response = await fetch(`${window.API_BASE_URL}/life/activity-feed/${lifeId}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+            console.log('Activity feed response:', result);
+
+            ledgerLoadingDiv.style.display = 'none';
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch activity feed.');
+            }
+
+            const ledger = result.ledger || [];
+            if (ledger.length === 0) {
+                noEntriesDiv.style.display = 'block';
+            } else {
+                ledger.forEach(entry => {
+                    const div = document.createElement('div');
+                    div.classList.add('ledger-entry');
+                    const timestamp = new Date(entry.timestamp).toLocaleString();
+                    div.innerHTML = `
+                        <div class="chakra-impact">${entry.senderEmail} put ${entry.chakraBalance} in ${entry.receiverEmail}'s ${entry.chakra} and started earning ${entry.creditOrDebt}.</div>
+                        <div class="entry-timestamp">${timestamp}</div>
+                    `;
+                    div.onclick = () => {
+                        window.location.href = `karmaledgerentry.html?id=${entry.id}`;
+                    };
+                    ledgerEntriesDiv.appendChild(div);
+                });
+            }
+
+        } catch (error) {
+            console.error('Fetch activity feed error:', error);
+            ledgerErrorDiv.textContent = error.message || 'Error loading activity feed. Please try again.';
+            ledgerErrorDiv.style.display = 'block';
+            ledgerLoadingDiv.style.display = 'none';
+        }
+    }
+
+    // --- Event Listeners ---
+    searchButton.addEventListener('click', () => searchLifeProfile(searchInput.value));
+
+    searchInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            searchButton.click();
+        }
+    });
+
+    // New "Back to Search" button on Profile List Screen
+    backToListSearchScreenButton.addEventListener('click', () => {
+        showScreen('search');
+    });
+
+    // "Back to Search Results" button on Specific Profile Screen
+    backToListButton.addEventListener('click', () => {
+        displayProfileList(lastSearchResults); // Re-display the last search results
+        showScreen('profile-list');
+    });
+
+    // "New Search" button on Specific Profile Screen
+    newSearchButton.addEventListener('click', () => {
+        showScreen('search');
+        searchInput.value = ''; // Clear input for truly new search
+    });
+
+    // Initial load: determine which screen to show
+    document.addEventListener('DOMContentLoaded', async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const query = urlParams.get('query');
+
+        if (query) {
+            searchInput.value = query;
+            await searchLifeProfile(query); // This function now handles screen transitions
+        } else {
+            showScreen('search'); // Default to search screen
+        }
+    });
+</script>
+</body>
+</html>

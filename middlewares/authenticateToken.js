@@ -1,25 +1,104 @@
+// File: middlewares/authenticateToken.js
+
 const jwt = require('jsonwebtoken');
+const { LifeAccount } = require('../database/associations.js');
 
-/**
- * Middleware to authenticate and verify JWT tokens.
- * Extracts lifeId and attaches it to the request object.
- */
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Token required' });
-    }
-
-    const token = authHeader.split(' ')[1]; // Extract token after 'Bearer'
-
+const authenticateToken = async (req, res, next) => {
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.lifeId = decoded.lifeId; // Attach lifeId from token payload
-        next(); // Proceed to the next middleware/handler
-    } catch (err) {
-        console.error('Token verification failed:', err.message);
-        return res.status(403).json({ error: 'Invalid or expired token' });
+        // Define public paths that do NOT require authentication.
+        // req.path here refers to the path relative to the router's mount point (e.g., '/search' for /api/life/search).
+        const publicPaths = [
+            '/search', // Allows public access to the life profile search
+            '/global-activity-feed' // <--- NEW: Allows public access to the global karma ledger
+            // Add any other public paths if needed in the future, e.g.:
+            // '/register',
+            // '/login'
+        ];
+
+        // Check if the current request path is one of the defined public paths.
+        if (publicPaths.includes(req.path)) {
+            console.log(`Bypassing authentication for public path: ${req.path}`);
+            return next(); // Skip authentication and proceed to the next middleware/route handler.
+        }
+
+        // --- All code below this point requires an authentication token ---
+
+        const authHeader = req.headers.authorization;
+        console.log('authenticateToken called:', {
+            path: req.path,
+            hasAuthHeader: !!authHeader
+        });
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.error('No valid auth header found:', { authHeader });
+            return res.status(401).json({ error: 'Authorization token required' });
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+            console.log('Token decoded successfully:', {
+                lifeId: decoded.lifeId,
+                email: decoded.email,
+                lifeIdType: typeof decoded.lifeId
+            });
+        } catch (err) {
+            console.error('Token verification failed:', err.message);
+            return res.status(403).json({ error: 'Invalid token' });
+        }
+
+        // Set email and lifeId from token
+        req.email = decoded.email || null;
+        req.lifeId = decoded.lifeId || null;
+
+        console.log('After setting from token:', {
+            reqEmail: req.email,
+            reqLifeId: req.lifeId,
+            reqLifeIdType: typeof req.lifeId
+        });
+
+        // If lifeId is missing but email is present, retrieve it from the database
+        if ((!req.lifeId || req.lifeId === undefined || req.lifeId === null) && req.email) {
+            console.log('lifeId missing, attempting to resolve from email:', req.email);
+            try {
+                const life = await LifeAccount.findOne({ where: { email: req.email } });
+                if (!life) {
+                    console.error('No LifeAccount found for email in middleware:', req.email);
+                    return res.status(403).json({ error: 'Invalid token: no user found' });
+                }
+                req.lifeId = life.lifeId;
+                console.log('Middleware: resolved lifeId from email:', {
+                    email: req.email,
+                    lifeId: req.lifeId,
+                    lifeIdType: typeof req.lifeId
+                });
+            } catch (dbErr) {
+                console.error('Database error in middleware:', dbErr.message);
+                return res.status(500).json({ error: 'Database error during authentication' });
+            }
+        }
+
+        // Final validation before proceeding
+        if (!req.lifeId || req.lifeId === undefined || req.lifeId === null) {
+            console.error('Final middleware check - lifeId still undefined:', {
+                reqLifeId: req.lifeId,
+                reqEmail: req.email,
+                decodedLifeId: decoded.lifeId
+            });
+            return res.status(403).json({ error: 'Unable to authenticate user' });
+        }
+
+        console.log('Middleware complete - proceeding with:', {
+            lifeId: req.lifeId,
+            email: req.email
+        });
+
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error.message, error.stack);
+        return res.status(500).json({ error: 'Authentication failed' });
     }
 };
 

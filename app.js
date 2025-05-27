@@ -1,34 +1,41 @@
-// app.js
+require('dotenv').config({ path: '.env' });
 const express = require('express');
+const path = require('path');
 const cron = require('node-cron');
-const rateLimit = require('express-rate-limit'); // <-- Add this line
-const { LifeAccount, KarmaBalance, ChakraProfile } = require('./database/associations.js');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const { LifeAccount, KarmaBalance, ChakraProfile, KarmaInteraction } = require('./database/associations.js'); // Add KarmaInteraction
 const { mineKarma } = require('./karmaMiner.js');
 const { karmaScaler } = require('./karmaVirality.js');
-const dotenv = require('dotenv');
 
-dotenv.config();
+console.log('DB_NAME:', process.env.DB_NAME); // Should print 'moksha_db'
+console.log('DB_USER:', process.env.DB_USER); // Should print 'moksha_admin'
+
+const sequelize = require('./database/database.js');
+
 const app = express();
 app.use(express.json());
 
-// ----- Rate limiting middleware -----
-const limiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 10, // limit each IP to 10 requests per minute
-    message: {
-        error: 'Too many requests. Please wait a minute and try again.'
-    }
-});
+app.use(cors({
+    origin: 'http://localhost:63342',
+    credentials: true,
+}));
 
-// Apply rate limiter globally (uncomment this if desired)
-// app.use(limiter);
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Or apply only to specific endpoints
+// const limiter = rateLimit({
+//     windowMs: 60 * 1000, // 1 minute
+//     max: 10,
+//     message: {
+//         error: 'Too many requests. Please wait a minute and try again.'
+//     }
+// });
+
 const loginRoutes = require('./routes/login');
 const lifeRoutes = require('./routes/life');
 
-app.use('/api/login', limiter, loginRoutes); // Optional: rate limit login
-app.use('/api/life', limiter, lifeRoutes);   // <- Rate limit life endpoints
+app.use('/api/login', loginRoutes);
+app.use('/api/life', lifeRoutes);
 
 async function startServer() {
     try {
@@ -38,8 +45,9 @@ async function startServer() {
         console.log('KarmaBalance table synced');
         await ChakraProfile.sync({ alter: true });
         console.log('ChakraProfile table synced');
+        await KarmaInteraction.sync({ alter: true }); // Add this line
+        console.log('KarmaInteraction table synced');
 
-        // Karma mining job: every hour
         cron.schedule('0 * * * *', async () => {
             try {
                 await mineKarma();
@@ -48,7 +56,6 @@ async function startServer() {
             }
         });
 
-        // Karma scaler job: every Sunday at midnight
         cron.schedule('0 0 * * 0', async () => {
             try {
                 const influencerLifeId = 1;

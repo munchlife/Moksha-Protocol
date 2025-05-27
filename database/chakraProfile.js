@@ -18,13 +18,13 @@ const ChakraProfile = sequelize.define('ChakraProfile', {
     },
     chakra: {
         type: DataTypes.ENUM(
-            'Muladhara',      // Root
-            'Svadhisthana',   // Sacral
-            'Manipura',       // Solar Plexus
-            'Anahata',        // Heart
-            'Vishuddhi',      // Throat
-            'Ajna',           // Third Eye
-            'Sahasrara'       // Crown
+            'Root',      // Muladhara
+            'Sacral',   // Svadhisthana
+            'Solar Plexus',       // Manipura
+            'Heart',        // Anahata
+            'Throat',      // Vishuddhi
+            'Third Eye',           // Ajna
+            'Crown'       // Sahasrara
         ),
         allowNull: false
     },

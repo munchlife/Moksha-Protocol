@@ -5,9 +5,9 @@ const sequelize = new Sequelize({
     dialect: 'postgres', // Use 'postgres' for PostgreSQL
     host: process.env.DB_HOST, // Set in Railway environment variables
     port: process.env.DB_PORT || 5432, // Default to 5432 for PostgreSQL
-    username: process.env.DB_USER, // Set in Railway environment variables
-    password: process.env.DB_PASSWORD, // Set in Railway environment variables
-    database: process.env.DB_NAME, // Set in Railway environment variables
+    username: process.env.DB_USER, // Set in environment variables
+    password: process.env.DB_PASSWORD, // Set in environment variables
+    database: process.env.DB_NAME, // Set in environment variables
     dialectOptions: {
         ssl: process.env.DB_SSL === 'true', // Optional SSL config for secure connections
     },

@@ -1,36 +1,68 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database/database.js');
-const LifeAccount = require('./LifeAccount'); // Import LifeAccount for relationships
+const LifeAccount = require('./LifeAccount');
+const { chakraEnumMap } = require('../chakraBalances.js');
 
 const KarmaInteraction = sequelize.define('KarmaInteraction', {
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+    },
     influencerLifeId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: LifeAccount,  // Reference to the LifeAccount table
-            key: 'lifeId',  // The column in LifeAccount to reference
+            model: LifeAccount,
+            key: 'lifeId',
         },
-        onDelete: 'CASCADE',  // Delete karma interactions if the influencer life is deleted
+        onDelete: 'CASCADE',
     },
     affectedLifeId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: LifeAccount,  // Reference to the LifeAccount table
-            key: 'lifeId',  // The column in LifeAccount to reference
+            model: LifeAccount,
+            key: 'lifeId',
         },
-        onDelete: 'CASCADE',  // Delete karma interactions if the affected life is deleted
+        onDelete: 'CASCADE',
+    },
+    karmaType: {
+        type: DataTypes.ENUM('positive', 'negative', 'resolved'),
+        allowNull: true,
+    },
+    affectedChakra: {
+        type: DataTypes.ENUM(...Object.keys(chakraEnumMap)),
+        allowNull: true,
+    },
+    negativeKarmaAccrued: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0,
+    },
+    positiveKarmaAccrued: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0,
     },
     timestamp: {
         type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW, // Automatically set the timestamp when the interaction occurs
+        defaultValue: DataTypes.NOW,
         allowNull: false
     }
 }, {
     indexes: [
-        { fields: ['influencerLifeId', 'affectedLifeId'], unique: true },  // Prevent duplicate karma interactions between same life pairs
+        {
+            unique: true,
+            fields: ['affectedLifeId', 'influencerLifeId', 'affectedChakra'],
+            where: {
+                karmaType: ['positive', 'negative']
+            },
+            name: 'unique_affected_influencer_chakra_active'
+        }
     ],
-    tableName: 'KarmaInteractions', // Explicitly set for clarity
+    tableName: 'KarmaInteractions',
+    timestamps: false
 });
 
 module.exports = KarmaInteraction;

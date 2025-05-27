@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update My Chakra Balance - Moksha Project</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;700&display=swap');
+
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background: linear-gradient(135deg, #4B0082, #808080);
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh; /* Use min-height for scrollable content */
+            text-align: center;
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            width: 90%; /* Increased width for better use of space */
+            max-width: 500px; /* Increased max-width */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-sizing: border-box;
+            margin: 20px 0; /* Add vertical margin to prevent sticking to edges */
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            font-size: 28px; /* Slightly larger heading */
+        }
+
+        .input-group {
+            width: 100%;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        textarea {
+            resize: vertical;
+            height: 80px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #4B0082;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 20px; /* Increased margin-top for button */
+        }
+
+        button:hover {
+            background: #6A0DAD;
+        }
+
+        .back-button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px; /* Slightly more padding */
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 20px;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        #message {
+            margin-top: 15px; /* Increased margin-top */
+            font-size: 15px; /* Slightly larger font */
+            font-weight: bold;
+        }
+
+        .success {
+            color: #28A745;
+        }
+
+        .error {
+            color: #FF4500;
+        }
+
+        #subscription-prompt {
+            display: none;
+            margin-bottom: 20px;
+            width: 100%; /* Ensure it respects container width */
+        }
+
+        #chakra-form {
+            display: none;
+            width: 100%; /* Ensure it respects container width */
+        }
+
+        /* New CSS for the payment reasons text */
+        .overflow-content {
+            text-align: left; /* Align text to the left */
+            max-height: 300px; /* Set a max height for the content */
+            overflow-y: auto; /* Add a scrollbar if content exceeds max-height */
+            padding-right: 15px; /* Add padding for scrollbar thumb */
+            margin-bottom: 20px; /* Space between text and button */
+            font-size: 14px; /* Adjust font size for better fit */
+            line-height: 1.5; /* Improve readability */
+        }
+
+        /* Specific styling for the paragraphs within overflow-content */
+        .overflow-content p {
+            margin-bottom: 1em; /* Space between paragraphs */
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Update My Chakra Balance</h2>
+    <div id="subscription-prompt">
+        <p>You need an active subscription to update your chakra balance.</p>
+        <div class="overflow-content">
+            <p><strong>Why You’re Paying</strong><br><br>
+
+                The $1/month subscription to the Moksha Protocol is your expected commitment. Here’s what this contribution supports:<br><br>
+
+                1. Hosting & Maintenance<br>
+                Running the protocol requires secure and consistent infrastructure. Cloud infrastructure provides the database and API layer necessary to keep your data safe and available. A $1/month stake in the technology allows Moksha Protocol to cover the administrative overhead of hosting a ledger for the included karmic currency.<br><br>
+
+                2. Continued Research & Development<br>
+                A more advanced version of the protocol is actively being worked on that includes real-time brainwave-based chakra state tracking, brainwave interference mapping, and more comprehensive alignment analytics. A monthly stake supports upgrades to the Moksha Protocol tech stack, specifically for hardware development, allowing for the possibility of building a technology that interfaces Moksha Protocol with brainwaves.<br><br>
+
+                3. Karmic Currency Integrity<br>
+                Included in the subscription is access to a form of karmic currency — a reflection of your energetic contributions and alignment with others. A monthly commitment ensures the karmic currency isn’t treated casually or exploited, reinforcing its purpose and value.<br><br>
+
+                4. Infeasibility of a Decentralized Architecture for this Model<br>
+                Moksha Protocol has explored (and is still exploring) fully decentralized blockchain-based alternatives, however, the frequency of the karmic currency updates creates a data storage constraint that current edge hardware cannot support which therefore necessitates traditional cloud infrastructure, at least for now.<br><br>
+
+                The Moksha Protocol will yield more value than the expense if used correctly, and a $2/month stake allows for the provision of the supporting technology to do so.</p>
+        </div>
+        <button id="subscribe-button">Subscribe Now</button>
+    </div>
+    <div id="chakra-form">
+        <div class="input-group">
+            <label for="influencer-first-name">Influencer First Name</label>
+            <input type="text" id="influencer-first-name" placeholder="Enter first name">
+        </div>
+        <div class="input-group">
+            <label for="influencer-last-name">Influencer Last Name</label>
+            <input type="text" id="influencer-last-name" placeholder="Enter last name">
+        </div>
+        <div class="input-group">
+            <label for="influencer-email">Influencer Email</label>
+            <input type="email" id="influencer-email" placeholder="Enter email">
+        </div>
+        <div class="input-group">
+            <label for="chakra">Select a Chakra</label>
+            <select id="chakra" onchange="updateBalanceOptions()">
+                <option value="">-- Select a Chakra --</option>
+                <option value="Root">Root</option>
+                <option value="Sacral">Sacral</option>
+                <option value="Solar Plexus">Solar Plexus</option>
+                <option value="Heart">Heart</option>
+                <option value="Throat">Throat</option>
+                <option value="Third Eye">Third Eye</option>
+                <option value="Crown">Crown</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="balance">Select a Balance</label>
+            <select id="balance">
+                <option value="">-- Select a Balance --</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="note">Note (Cause of Balance or Imbalance)</label>
+            <textarea id="note" placeholder="Provide a reason..."></textarea>
+        </div>
+        <button onclick="updateChakraBalance()">Update Balance</button>
+    </div>
+    <div id="message"></div>
+</div>
+<a href="home.html" class="back-button">Back to Home</a>
+
+<script src="config.js"></script>
+<script>
+    const stripe = Stripe('pk_test_51MbnLcBVa34HiI2eWoUhgdMuWDtjqDkUwjMGuUGeiZCTO1jVRSFRXWu5nSD1YE74NegXW12hoSm5bgCFLCxyw4RH00IT16k6VA');
+    const chakraBalances = {
+        Root: ['Fear', 'Groundedness'],
+        Sacral: ['Shame', 'Joy'],
+        "Solar Plexus": ['Powerlessness', 'Autonomy'],
+        Heart: ['Grief', 'Gratitude'],
+        Throat: ['Censorship', 'Vocality'],
+        "Third Eye": ['Illusion', 'Insight'],
+        Crown: ['Division', 'Connectedness']
+    };
+
+    function setMessage(message, isSuccess = false) {
+        const messageDiv = document.getElementById('message');
+        messageDiv.textContent = message;
+        messageDiv.className = isSuccess ? 'success' : 'error';
+    }
+
+    function updateBalanceOptions() {
+        const chakra = document.getElementById('chakra').value;
+        const balanceSelect = document.getElementById('balance');
+        balanceSelect.innerHTML = '<option value="">-- Select a Balance --</option>';
+
+        if (chakra in chakraBalances) {
+            chakraBalances[chakra].forEach(balance => {
+                const option = document.createElement('option');
+                option.value = balance;
+                option.textContent = balance;
+                balanceSelect.appendChild(option);
+            });
+        }
+    }
+
+    async function checkSubscription() {
+        const token = localStorage.getItem('token');
+        const lifeId = localStorage.getItem('lifeId');
+        console.log('check-subscription request:', {
+            token: token ? token.substring(0, 10) + '...' : 'null',
+            lifeId
+        });
+
+        if (!token) {
+            console.error('Missing token in localStorage');
+            localStorage.clear();
+            setMessage('Please log in to access this page.');
+            setTimeout(() => window.location.href = 'login.html', 2000);
+            return false;
+        }
+
+        try {
+            const decoded = JSON.parse(atob(token.split('.')[1]));
+            console.log('Client-decoded token:', { lifeId: decoded.lifeId, email: decoded.email });
+
+            if (!lifeId && decoded.lifeId) {
+                console.log('Setting lifeId from token:', decoded.lifeId);
+                localStorage.setItem('lifeId', decoded.lifeId);
+            }
+        } catch (err) {
+            console.error('Invalid token format:', err.message);
+            localStorage.clear();
+            setMessage('Invalid session. Please log in again.');
+            setTimeout(() => window.location.href = 'login.html', 2000);
+            return false;
+        }
+
+        console.log('API_BASE_URL:', window.API_BASE_URL);
+        const apiUrl = `${window.API_BASE_URL}/life/check-subscription`;
+        console.log('Sending request to:', apiUrl);
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+            console.log('Request headers:', {
+                'Content-Type': headers['Content-Type'],
+                Authorization: headers.Authorization.substring(0, 20) + '...'
+            });
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers
+            });
+
+            const result = await response.json();
+            console.log('check-subscription response:', { status: response.status, result });
+            if (!response.ok) {
+                console.error('check-subscription failed:', { status: response.status, result });
+                if (response.status === 401 || response.status === 403) {
+                    console.error('Authentication failed, clearing localStorage:', result);
+                    localStorage.clear();
+                    setMessage('Session expired. Please log in again.');
+                    setTimeout(() => window.location.href = 'login.html', 2000);
+                    return false;
+                }
+                throw new Error(result.error || 'Failed to check subscription.');
+            }
+
+            return result.subscribed;
+        } catch (error) {
+            console.error('Check subscription error:', error.message, error.stack);
+            setMessage('Error checking subscription: ' + error.message);
+            return false;
+        }
+    }
+
+    async function initiateCheckout() {
+        const token = localStorage.getItem('token');
+        console.log('initiateCheckout: Token:', token ? token.substring(0, 10) + '...' : 'null');
+        if (!token) {
+            console.error('initiateCheckout: No token found');
+            setMessage('Please log in to subscribe.');
+            setTimeout(() => window.location.href = 'login.html', 2000);
+            return;
+        }
+
+        // Generate a unique key for sessionStorage based on a timestamp or user email
+        const uniqueKey = `backupToken_${Date.now()}`; // Use timestamp for uniqueness
+        sessionStorage.setItem(uniqueKey, token);
+        console.log('initiateCheckout: Stored backup token in sessionStorage with key:', uniqueKey);
+
+        try {
+            console.log('initiateCheckout: Sending request to create-checkout-session');
+            const response = await fetch(`${window.API_BASE_URL}/life/create-checkout-session`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+            console.log('initiateCheckout: Checkout session response:', { status: response.status, result });
+
+            if (!response.ok) {
+                console.error('initiateCheckout: Failed to create checkout session:', result);
+                throw new Error(result.error || 'Failed to create checkout session');
+            }
+
+            const { sessionId } = result;
+            if (!sessionId) {
+                console.error('initiateCheckout: No sessionId returned from server');
+                throw new Error('Invalid checkout session');
+            }
+
+            // Store the sessionId in sessionStorage to use as the key later
+            sessionStorage.setItem('checkoutSessionId', sessionId);
+            console.log('initiateCheckout: Stored sessionId in sessionStorage:', sessionId);
+
+            console.log('initiateCheckout: Redirecting to Stripe checkout with sessionId:', sessionId);
+            const { error } = await stripe.redirectToCheckout({ sessionId });
+            if (error) {
+                console.error('initiateCheckout: Stripe redirect error:', error.message);
+                setMessage('Error redirecting to checkout: ' + error.message);
+            }
+        } catch (error) {
+            console.error('initiateCheckout: Checkout error:', error.message);
+            setMessage('Error initiating checkout: ' + error.message);
+        }
+    }
+
+    async function updateChakraBalance() {
+        const token = localStorage.getItem('token');
+        let lifeId = localStorage.getItem('lifeId');
+        const influencerFirstName = document.getElementById('influencer-first-name').value.trim();
+        const influencerLastName = document.getElementById('influencer-last-name').value.trim();
+        const influencerEmail = document.getElementById('influencer-email').value.trim();
+        const chakra = document.getElementById('chakra').value;
+        const chakraBalance = document.getElementById('balance').value;
+        const note = document.getElementById('note').value.trim();
+
+        if (!lifeId && token) {
+            try {
+                const decoded = JSON.parse(atob(token.split('.')[1]));
+                if (decoded.lifeId) {
+                    lifeId = decoded.lifeId;
+                    localStorage.setItem('lifeId', lifeId);
+                    console.log('Retrieved lifeId from token:', lifeId);
+                }
+            } catch (err) {
+                console.error('Failed to extract lifeId from token:', err);
+            }
+        }
+
+        if (!lifeId) {
+            setMessage('Please log in to update your chakra balance.');
+            return;
+        }
+
+        if (!chakra || !chakraBalance) {
+            setMessage('Please select a chakra and balance.');
+            return;
+        }
+
+        if (influencerEmail && (!influencerFirstName || !influencerLastName)) {
+            setMessage('Influencer first and last name are required if email is provided.');
+            return;
+        }
+
+        const payload = {
+            lifeId,
+            chakra,
+            chakraBalance,
+            influencerEmail: influencerEmail || null,
+            influencerFirstName: influencerFirstName || null,
+            influencerLastName: influencerLastName || null,
+            note: note || null
+        };
+
+        try {
+            console.log('Sending chakra balance update:', payload);
+            const response = await fetch(`${window.API_BASE_URL}/life/update-chakra-balance`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            console.log('Update chakra balance response:', result);
+
+            if (!response.ok) {
+                throw new Error(result.error || `Failed to update chakra balance: ${response.status}`);
+            }
+
+            setMessage('Chakra balance updated successfully!', true);
+            setTimeout(() => window.location.href = 'home.html', 2000);
+        } catch (error) {
+            console.error('Update chakra balance error:', error.message, error.stack);
+            setMessage(error.message || 'Error updating chakra balance. Please try again.');
+        }
+    }
+
+    async function initializePage() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success')) {
+            setMessage('Subscription successful! You can now update your chakra balance.', true);
+        } else if (urlParams.get('canceled')) {
+            setMessage('Subscription canceled. Please subscribe to update your chakra balance.');
+        }
+
+        const isSubscribed = await checkSubscription();
+        const subscriptionPrompt = document.getElementById('subscription-prompt');
+        const chakraForm = document.getElementById('chakra-form');
+
+        if (isSubscribed) {
+            subscriptionPrompt.style.display = 'none';
+            chakraForm.style.display = 'block';
+        } else {
+            subscriptionPrompt.style.display = 'block';
+            chakraForm.style.display = 'none';
+            document.getElementById('subscribe-button').addEventListener('click', initiateCheckout);
+        }
+    }
+
+    window.onload = initializePage;
+</script>
+</body>
+</html>

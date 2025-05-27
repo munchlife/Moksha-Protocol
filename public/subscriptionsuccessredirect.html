@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting - Moksha Project</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;700&display=swap');
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background: linear-gradient(135deg, #4B0082, #808080);
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #FFD700;
+        }
+        p {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        a {
+            color: #FFD700;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        a:hover {
+            color: #FFA500;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #FFD700;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="spinner"></div>
+    <h2>Redirecting...</h2>
+    <p>Please wait while we verify your subscription.</p>
+    <p>If you are not redirected automatically, <a id="manualRedirect" href="/chakrabalance.html">click here</a>.</p>
+</div>
+
+<script>
+    // Environment configuration
+    const ENV = 'dev'; // Change to 'prod' when deploying
+    const config = {
+        dev: {
+            API_BASE_URL: 'http://localhost:3000/api',
+            FRONTEND_BASE_URL: 'http://localhost:63342/MokshaProtocol/public'
+        },
+        prod: {
+            API_BASE_URL: 'https://your-railway-instance.up.railway.app',
+            FRONTEND_BASE_URL: 'https://yourdomain.com'
+        }
+    };
+    window.API_BASE_URL = config[ENV].API_BASE_URL;
+    window.FRONTEND_BASE_URL = config[ENV].FRONTEND_BASE_URL;
+</script>
+<script>
+    function validateToken(token) {
+        if (!token) {
+            console.error('validateToken: No token provided');
+            return false;
+        }
+        console.log('validateToken: Token present:', token.substring(0, 10) + '...');
+        return true;
+    }
+
+    async function pollSubscriptionStatus(token) {
+        console.log('pollSubscriptionStatus: Token:', token ? token.substring(0, 10) + '...' : 'missing');
+        if (!token || !validateToken(token)) {
+            console.warn('pollSubscriptionStatus: No valid token, redirecting to chakrabalance.html?canceled=true');
+            window.location.replace(`${window.FRONTEND_BASE_URL}/chakrabalance.html?canceled=true`);
+            return;
+        }
+
+        let retries = 5;
+        let delay = 1000; // 1 second
+
+        while (retries > 0) {
+            try {
+                console.log(`pollSubscriptionStatus: Attempt ${6 - retries}/${5}`);
+                const response = await fetch(`${window.API_BASE_URL}/life/check-subscription`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                console.log('pollSubscriptionStatus: Response status:', response.status);
+                const result = await response.json();
+                console.log('pollSubscriptionStatus: Response:', result);
+
+                if (!response.ok) {
+                    console.error('pollSubscriptionStatus: Request failed:', { status: response.status, error: result.error });
+                    throw new Error(result.error || 'Failed to check subscription');
+                }
+
+                if (result.subscribed) {
+                    console.log('pollSubscriptionStatus: Subscription confirmed, redirecting to chakrabalance.html');
+                    localStorage.setItem('token', token);
+                    window.location.replace(`${window.FRONTEND_BASE_URL}/chakrabalance.html?success=true`);
+                    return;
+                }
+
+                retries--;
+                console.log(`pollSubscriptionStatus: Subscription not yet active, ${retries} retries left`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } catch (error) {
+                console.error('pollSubscriptionStatus: Error:', error.message);
+                retries--;
+                console.log(`pollSubscriptionStatus: Retrying, ${retries} attempts left`);
+                if (retries === 0) {
+                    console.warn('pollSubscriptionStatus: Subscription not found after retries, redirecting to chakrabalance.html?canceled=true');
+                    localStorage.setItem('token', token);
+                    window.location.replace(`${window.FRONTEND_BASE_URL}/chakrabalance.html?canceled=true`);
+                    return;
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+
+    window.onload = () => {
+        console.log('window.onload: Checking token sources, origin:', window.location.origin);
+        let token = null;
+
+        // Prioritize URL token
+        const urlParams = new URLSearchParams(window.location.search);
+        token = urlParams.get('token');
+        console.log('window.onload: Token in URL:', token ? token.substring(0, 10) + '...' : 'missing');
+        if (token) {
+            console.log('window.onload: Restored token from URL');
+            localStorage.setItem('token', token);
+        } else {
+            console.warn('window.onload: No token in URL, checking localStorage');
+            token = localStorage.getItem('token');
+            console.log('window.onload: Token in localStorage:', token ? token.substring(0, 10) + '...' : 'missing');
+        }
+
+        const status = urlParams.get('success') ? 'success' : urlParams.get('canceled') ? 'canceled' : '';
+        console.log('window.onload: Redirect status:', status);
+        document.getElementById('manualRedirect').href = `${window.FRONTEND_BASE_URL}/chakrabalance.html${status ? `?${status}=true` : ''}`;
+
+        if (status === 'success') {
+            console.log('window.onload: Starting subscription polling');
+            pollSubscriptionStatus(token);
+        } else {
+            console.log('window.onload: Redirecting to chakrabalance.html with canceled status');
+            if (token) localStorage.setItem('token', token);
+            window.location.replace(`${window.FRONTEND_BASE_URL}/chakrabalance.html?canceled=true`);
+        }
+    };
+</script>
+</body>
+</html>

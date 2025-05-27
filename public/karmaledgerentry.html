@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karma Ledger Entry</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;700&display=swap');
+
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background: linear-gradient(135deg, #4B0082, #808080);
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            overflow-y: auto;
+            width: 100%; /* Ensure it takes full width for header */
+        }
+
+        /* Header Style - Consistent with home.html */
+        .header {
+            width: 100%;
+            background: rgba(75, 0, 130, 0.9); /* Darker purple from home.html */
+            padding: 15px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); /* Subtle shadow like home.html */
+        }
+
+        /* Entry Container - Similar to ledger entries in home.html */
+        .entry-container {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 40px; /* More space from header */
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px; /* More padding for better spacing */
+            border-radius: 12px; /* Rounded corners like home.html cards */
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); /* Stronger shadow */
+            text-align: center;
+            box-sizing: border-box; /* Include padding in width */
+        }
+
+        .entry-text {
+            font-size: 20px; /* Slightly larger text */
+            font-weight: bold;
+            color: #FFD700; /* Gold color */
+            margin-bottom: 20px; /* More space below */
+            line-height: 1.5; /* Better readability */
+        }
+
+        .note-label {
+            font-size: 16px;
+            color: #ccc;
+            margin-top: 25px; /* More space above note */
+            display: block;
+            text-transform: uppercase; /* Make label stand out */
+            letter-spacing: 1px;
+        }
+
+        .note-content {
+            margin-top: 10px;
+            font-size: 16px;
+            font-style: italic;
+            color: #E0E0E0; /* Softer white for note content */
+            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+            text-align: left;
+            padding: 0 10px; /* Add some padding to the note content */
+            border-left: 3px solid #FFD700; /* A small accent line */
+            padding-left: 15px;
+        }
+
+        /* Back Button */
+        .back-button {
+            margin-top: 40px; /* More space below content */
+            padding: 12px 25px;
+            font-size: 18px;
+            background: #4B0082; /* Deep purple background */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Button shadow */
+        }
+
+        .back-button:hover {
+            background: #6A0DAD; /* Lighter purple on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+
+        /* Loading and Error States - Keep consistent */
+        .loading {
+            font-size: 18px; /* Slightly larger */
+            color: #FFD700;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .error {
+            font-size: 18px; /* Slightly larger */
+            color: #FF4500;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="header">Karma Ledger Entry Details</div>
+
+<div class="entry-container">
+    <div id="loading" class="loading">Loading entry details...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="entryContent" style="display: none;">
+        <div class="entry-text" id="entryText"></div>
+        <span class="note-label">Note:</span>
+        <div class="note-content" id="noteContent"></div>
+    </div>
+</div>
+
+<button class="back-button" onclick="goBack()">Back to My Ledger</button>
+
+<script src="config.js"></script>
+<script>
+    // Function to go back in browser history
+    function goBack() {
+        // This will take the user back to the previous page, which should be home.html
+        window.history.back();
+    }
+
+    // Main function to fetch and display the ledger entry
+    async function fetchLedgerEntry() {
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const entryContentDiv = document.getElementById('entryContent');
+        const entryTextDiv = document.getElementById('entryText');
+        const noteContentDiv = document.getElementById('noteContent');
+
+        // Show loading state initially
+        loadingDiv.style.display = 'block';
+        errorDiv.style.display = 'none';
+        entryContentDiv.style.display = 'none';
+
+        // Get interaction ID from URL query parameter (e.g., karmaledgerentry.html?id=123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const interactionId = urlParams.get('id');
+
+        // Validate that an ID was found
+        if (!interactionId || isNaN(parseInt(interactionId, 10))) {
+            errorDiv.textContent = 'Error: Invalid or no entry ID provided in the URL.';
+            errorDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+            return;
+        }
+
+        try {
+            console.log('Fetching ledger entry for ID:', interactionId);
+            // Make API call to your backend
+            const response = await fetch(`${window.API_BASE_URL}/life/activity-feed/entry/${interactionId}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+            console.log('Ledger entry API response:', result);
+
+            // Handle API errors
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch ledger entry details.');
+            }
+
+            // Populate the HTML elements with fetched data
+            entryTextDiv.textContent = result.entryMessage;
+            noteContentDiv.textContent = result.note;
+
+            // Hide loading/error and show content
+            loadingDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            entryContentDiv.style.display = 'block';
+
+        } catch (error) {
+            console.error('Fetch ledger entry error:', error);
+            errorDiv.textContent = error.message || 'Error loading entry details. Please try again.';
+            errorDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+            entryContentDiv.style.display = 'none';
+        }
+    }
+
+    // Call the fetch function when the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', fetchLedgerEntry);
+</script>
+
+</body>
+</html>

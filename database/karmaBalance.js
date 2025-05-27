@@ -3,7 +3,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database/database.js');
 const LifeAccount = require('./lifeAccount.js');
-const { chakraEnumMap } = require('../chakraBalances.js');
 
 const KarmaBalance = sequelize.define('KarmaBalance', {
     karmaBalanceId: {
@@ -22,34 +21,6 @@ const KarmaBalance = sequelize.define('KarmaBalance', {
     },
     influencerLifeId: {
         type: DataTypes.INTEGER,
-        allowNull: true,
-    },
-    muladharaBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Muladhara),
-        allowNull: true,
-    },
-    svadhisthanaBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Svadhisthana),
-        allowNull: true,
-    },
-    manipuraBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Manipura),
-        allowNull: true,
-    },
-    anahataBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Anahata),
-        allowNull: true,
-    },
-    vishuddhiBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Vishuddhi),
-        allowNull: true,
-    },
-    ajnaBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Ajna),
-        allowNull: true,
-    },
-    sahasraraBalance: {
-        type: DataTypes.ENUM(...chakraEnumMap.Sahasrara),
         allowNull: true,
     },
     positiveKarma: {

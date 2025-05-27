@@ -25,7 +25,7 @@ const LifeAccount = sequelize.define('LifeAccount', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    passcodeExpiresAt: {
+    passcodeExpiration: {
         type: DataTypes.DATE,
         allowNull: true,
     },
@@ -33,6 +33,10 @@ const LifeAccount = sequelize.define('LifeAccount', {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: false,
+    },
+    stripeCustomerId: {
+        type: DataTypes.STRING,
+        allowNull: true
     },
     timestamp: {
         type: DataTypes.DATE,

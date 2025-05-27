@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Moksha Project - Home</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;700&display=swap');
+
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background: linear-gradient(135deg, #4B0082, #808080);
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            overflow-y: auto;
+            width: 100%;
+        }
+
+        /* Sidebar Menu */
+        .content-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+        }
+
+        .menu__toggle {
+            display: none;
+        }
+
+        .menu__btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .menu__btn span,
+        .menu__btn span::before,
+        .menu__btn span::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 5px;
+            background-color: white;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+
+        .menu__btn span::before {
+            top: -8px;
+        }
+
+        .menu__btn span::after {
+            bottom: -8px;
+        }
+
+        .menu__toggle:checked + .menu__btn span {
+            background-color: transparent;
+        }
+
+        .menu__toggle:checked + .menu__btn span::before {
+            transform: translateY(8px) rotate(45deg);
+        }
+
+        .menu__toggle:checked + .menu__btn span::after {
+            transform: translateY(-8px) rotate(-45deg);
+        }
+
+        .menu__box {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            background-color: #333;
+            width: 250px;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: -250px;
+            transition: left 0.3s ease;
+            padding-top: 50px;
+        }
+
+        .menu__toggle:checked ~ .menu__box {
+            left: 0;
+        }
+
+        .menu__item {
+            color: white;
+            padding: 15px;
+            text-decoration: none;
+            display: block;
+            font-size: 18px;
+            border-bottom: 1px solid #444;
+        }
+
+        .menu__item:hover {
+            background-color: #555;
+        }
+
+        /* Lightning Button */
+        .lightning-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: white;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightning-btn:hover {
+            color: yellow;
+        }
+
+        /* Container for main content */
+        .container {
+            padding: 20px;
+            width: 100%;
+            max-width: 1000px;
+            margin-left: 260px;
+            margin-top: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Karma Balance Overview */
+        .karma-balance {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 900px;
+            margin: 20px auto;
+        }
+
+        .karma-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            flex: 1;
+            margin: 0 10px;
+            text-align: center;
+            color: white;
+        }
+
+        .karma-card h3 {
+            margin-top: 0;
+            font-size: 20px;
+        }
+
+        .karma-card p {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Ledger / Timeline / Feed */
+        .ledger-container {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+        }
+
+        .ledger-entry {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+        }
+
+        .chakra-impact {
+            font-weight: bold;
+            color: white;
+        }
+
+        /* Loading and Error States */
+        .loading {
+            font-size: 16px;
+            color: #FFD700;
+            margin: 20px 0;
+        }
+
+        .error {
+            font-size: 16px;
+            color: #FF4500;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+<div class="content-menu">
+    <input id="menu__toggle" type="checkbox" class="menu__toggle" />
+    <label class="menu__btn" for="menu__toggle">
+        <span></span>
+    </label>
+    <ul class="menu__box">
+        <li><a class="menu__item" href="home.html" onclick="closeMenu()">🏠 Home</a></li>
+        <li><a class="menu__item" href="lifeprofile.html" onclick="closeMenu()">🔍 Search Other Chakra Profiles</a></li>
+        <li><a class="menu__item" href="globalkarmaledger.html" onclick="closeMenu()">⚡ Global Karma Ledger</a></li>
+    </ul>
+</div>
+
+<button class="lightning-btn" onclick="window.location.href='chakrabalance.html'">⚡</button>
+
+<div class="container">
+    <div class="karma-balance">
+        <div class="karma-card">
+            <h3>My Current Karma Balance</h3>
+            <p id="my-karma-balance">Loading...</p>
+        </div>
+        <div class="karma-card">
+            <h3>Global Average Karma Balance</h3>
+            <p id="global-karma-balance">Loading...</p>
+        </div>
+    </div>
+
+    <section class="ledger-container" id="ledger-list">
+        <h2>My Karma Ledger</h2>
+        <div id="loading" class="loading">Loading activity feed...</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </section>
+</div>
+
+<script src="config.js"></script>
+<script>
+    function closeMenu() {
+        document.getElementById('menu__toggle').checked = false;
+    }
+
+    // Function to fetch and display Net Karma
+    async function fetchNetKarma() {
+        const lifeId = localStorage.getItem('lifeId');
+        const myKarmaBalanceElement = document.getElementById('my-karma-balance');
+
+        if (!lifeId) {
+            myKarmaBalanceElement.textContent = 'Error: Not logged in.';
+            myKarmaBalanceElement.style.color = 'red';
+            return;
+        }
+
+        try {
+            console.log('Fetching Net Karma for lifeId:', lifeId);
+            const token = localStorage.getItem('token'); // Assuming you store the JWT token
+
+            const response = await fetch(`${window.API_BASE_URL}/life/get-net-karma/${lifeId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` // Include the JWT token for authentication
+                }
+            });
+
+            const result = await response.json();
+            console.log('Net Karma response:', result);
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch net karma.');
+            }
+
+            // Update the display with the fetched netKarma
+            myKarmaBalanceElement.textContent = result.netKarma;
+
+            // Apply color based on karma value
+            if (result.netKarma > 0) {
+                myKarmaBalanceElement.style.color = 'lightgreen';
+            } else if (result.netKarma < 0) {
+                myKarmaBalanceElement.style.color = 'red';
+            } else {
+                myKarmaBalanceElement.style.color = 'white'; // Neutral
+            }
+
+        } catch (error) {
+            console.error('Fetch net karma error:', error);
+            myKarmaBalanceElement.textContent = `Error: ${error.message}`;
+            myKarmaBalanceElement.style.color = 'red';
+        }
+    }
+
+
+    // Original fetchActivityFeed function (unchanged - provided to ensure no unintended modifications)
+    async function fetchActivityFeed() {
+        const lifeId = localStorage.getItem('lifeId');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const ledgerContainer = document.getElementById('ledger-list');
+
+        if (!lifeId) {
+            errorDiv.textContent = 'Error: User not logged in. Please log in again.';
+            errorDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+            return;
+        }
+
+        try {
+            console.log('Fetching:', `${window.API_BASE_URL}/life/activity-feed/${lifeId}`);
+            const response = await fetch(`${window.API_BASE_URL}/life/activity-feed/${lifeId}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+            console.log('Activity feed response:', result);
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch activity feed.');
+            }
+
+            // Hide loading and error
+            loadingDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            // Clear previous entries
+            ledgerContainer.querySelectorAll('.ledger-entry').forEach(e => e.remove());
+
+
+            // Populate ledger entries
+            const ledger = result.ledger || [];
+            if (ledger.length === 0) {
+                const noEntriesDiv = document.createElement('div');
+                noEntriesDiv.textContent = 'No karma ledger entries found yet.';
+                noEntriesDiv.style.color = '#ccc';
+                noEntriesDiv.style.marginTop = '20px';
+                ledgerContainer.appendChild(noEntriesDiv);
+            } else {
+                ledger.forEach(entry => {
+                    const div = document.createElement('div');
+                    div.classList.add('ledger-entry');
+                    div.innerHTML = `<div class="chakra-impact">${entry.senderEmail} put ${entry.chakraBalance} in ${entry.receiverEmail}'s ${entry.chakra} chakra and started earning ${entry.creditOrDebt}</div>`;
+                    // --- CRITICAL CHANGE: Dynamically construct the URL for the static HTML file ---
+                    div.onclick = () => {
+                        // This will create a URL like 'karmaledgerentry.html?id=7'
+                        // Which WebStorm's server should resolve correctly if karmaledgerentry.html is in /public
+                        window.location.href = `karmaledgerentry.html?id=${entry.id}`;
+                    };
+                    ledgerContainer.appendChild(div);
+                });
+            }
+
+            // Update karma balance (placeholder, as endpoint doesn't provide this)
+            // This line is the culprit that was setting 'Positive' or 'Negative' statically
+            // It needs to be removed as fetchNetKarma is responsible for my-karma-balance
+            // document.getElementById('my-karma-balance').textContent = 'Positive'; // REMOVE THIS LINE
+            document.getElementById('global-karma-balance').textContent = 'Neutral'; // Keep this as it's a global placeholder
+        } catch (error) {
+            console.error('Fetch activity feed error:', error);
+            errorDiv.textContent = error.message || 'Error loading activity feed. Please try again.';
+            errorDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+        }
+    }
+
+    // Fetch data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchNetKarma(); // Call this function to update "My Current Karma Balance"
+        fetchActivityFeed(); // Keep this call for the ledger
+    });
+</script>
+</body>
+</html>
