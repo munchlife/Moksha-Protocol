@@ -8,3 +8,5 @@
 /dataSources.local.xml
 node_modules/
 .env
+/config/
+/migrations/

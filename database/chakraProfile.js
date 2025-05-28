@@ -43,10 +43,7 @@ const ChakraProfile = sequelize.define('ChakraProfile', {
 }, {
     timestamps: false,
     indexes: [
-        {
-            unique: true,
-            fields: ['lifeId', 'chakra']
-        }
+        { fields: ['lifeId', 'timestamp'] } // For performance
     ]
 });
 

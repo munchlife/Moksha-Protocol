@@ -1,116 +1,127 @@
 const { KarmaBalance, KarmaInteraction, ChakraProfile } = require('./database/associations.js');
 const { chakraBalances } = require('./chakraBalances.js');
+const { Sequelize, Op } = require('sequelize');
+const sequelize = require('./database/database.js'); // Import sequelize instance
 
 async function mineKarma() {
     console.log('⏳ Running hourly karma job...');
+    let transaction;
     try {
-        // Fetch negative KarmaInteractions
-        const negativeInteractions = await KarmaInteraction.findAll({
+        transaction = await sequelize.transaction();
+
+        // Fetch all active KarmaInteractions
+        const interactions = await KarmaInteraction.findAll({
             where: {
-                karmaType: 'negative',
-                negativeKarmaAccrued: { [Op.gte]: 0 }
-            }
+                originalKarmaType: { [Op.in]: ['positive', 'negative'] },
+                karmaType: { [Op.ne]: 'resolved' },
+                [Op.or]: [
+                    { positiveKarmaAccrued: { [Op.gte]: 0 } },
+                    { negativeKarmaAccrued: { [Op.gte]: 0 } }
+                ]
+            },
+            order: [['timestamp', 'DESC']],
+            transaction
         });
-        console.log('Negative interactions fetched:', negativeInteractions.length);
+        console.log('Active interactions fetched:', interactions.length);
+
+        // Group interactions by influencerLifeId, affectedLifeId, and affectedChakra
+        const interactionGroups = {};
+        for (const interaction of interactions) {
+            const key = `${interaction.influencerLifeId}-${interaction.affectedLifeId}-${interaction.affectedChakra}`;
+            if (!interactionGroups[key] || new Date(interaction.timestamp) > new Date(interactionGroups[key].timestamp)) {
+                interactionGroups[key] = interaction;
+            }
+        }
+
+        console.log('Unique interaction groups to process:', Object.keys(interactionGroups).length);
 
         const now = new Date();
         const msInHour = 1000 * 60 * 60;
 
-        for (const interaction of negativeInteractions) {
-            const { influencerLifeId, affectedLifeId, affectedChakra, timestamp } = interaction;
+        for (const interaction of Object.values(interactionGroups)) {
+            const { influencerLifeId, affectedLifeId, affectedChakra, originalKarmaType, timestamp, id } = interaction;
             const createdAt = new Date(timestamp);
             const hoursOutstanding = Math.floor((now - createdAt) / msInHour);
-            if (hoursOutstanding < 1) continue;
+            if (hoursOutstanding < 1) {
+                console.log(`Skipping interaction ID: ${id}, less than 1 hour old`);
+                continue;
+            }
 
             const chakraProfile = await ChakraProfile.findOne({
                 where: {
                     lifeId: affectedLifeId,
                     chakra: affectedChakra
-                }
+                },
+                transaction
             });
 
-            if (!chakraProfile || !chakraProfile.closedBy.includes(influencerLifeId)) {
+            const isNegative = originalKarmaType === 'negative';
+            const isValidProfile = chakraProfile && (
+                (isNegative && chakraProfile.closedBy.includes(influencerLifeId)) ||
+                (!isNegative && chakraProfile.openedBy.includes(influencerLifeId))
+            );
+
+            if (!isValidProfile) {
                 await interaction.update({
+                    positiveKarmaAccrued: 0,
                     negativeKarmaAccrued: 0,
                     karmaType: 'resolved',
                     timestamp: new Date()
-                });
+                }, { transaction });
+                console.log(`Resolved interaction ID: ${id} for influencerLifeId: ${influencerLifeId}, chakra: ${affectedChakra}`);
                 continue;
             }
 
+            // Find the most recent KarmaBalance record for influencer
             const influencerKarma = await KarmaBalance.findOne({
                 where: { lifeId: influencerLifeId },
-                order: [['timestamp', 'DESC']]
+                order: [['timestamp', 'DESC']],
+                transaction
             });
 
             if (influencerKarma) {
-                const newNegativeKarmaAccrued = (interaction.negativeKarmaAccrued || 0) + 1;
-                await interaction.update({
-                    negativeKarmaAccrued: newNegativeKarmaAccrued,
-                    timestamp: new Date()
-                });
+                let updateFields = {};
+                if (isNegative) {
+                    const newNegativeKarmaAccrued = (interaction.negativeKarmaAccrued || 0) + 1;
+                    updateFields = {
+                        negativeKarmaAccrued: newNegativeKarmaAccrued,
+                        timestamp: new Date()
+                    };
+                    await interaction.update(updateFields, { transaction });
 
-                await influencerKarma.update({
-                    negativeKarma: (influencerKarma.negativeKarma || 0) + 1,
-                    timestamp: new Date()
-                });
-                console.log(`⬇️ Negative karma for ${influencerLifeId} (interaction ID: ${interaction.id})`);
-            }
-        }
+                    const newNegativeKarma = (influencerKarma.negativeKarma || 0) + 1;
+                    await influencerKarma.update({
+                        negativeKarma: newNegativeKarma,
+                        timestamp: new Date()
+                    }, { transaction });
 
-        // Fetch positive KarmaInteractions
-        const positiveInteractions = await KarmaInteraction.findAll({
-            where: {
-                karmaType: 'positive',
-                positiveKarmaAccrued: { [Op.gte]: 0 }
-            }
-        });
-        console.log('Positive interactions fetched:', positiveInteractions.length);
+                    console.log(`⬇️ Negative karma updated for ${influencerLifeId} (interaction ID: ${id}, newNegativeKarmaAccrued: ${newNegativeKarmaAccrued}, chakra: ${affectedChakra})`);
+                } else {
+                    const newPositiveKarmaAccrued = (interaction.positiveKarmaAccrued || 0) + 1;
+                    updateFields = {
+                        positiveKarmaAccrued: newPositiveKarmaAccrued,
+                        timestamp: new Date()
+                    };
+                    await interaction.update(updateFields, { transaction });
 
-        for (const interaction of positiveInteractions) {
-            const { influencerLifeId, affectedLifeId, affectedChakra, timestamp } = interaction;
-            const createdAt = new Date(timestamp);
-            const hoursOutstanding = Math.floor((now - createdAt) / msInHour);
-            if (hoursOutstanding < 1) continue;
+                    const newPositiveKarma = (influencerKarma.positiveKarma || 0) + 1;
+                    await influencerKarma.update({
+                        positiveKarma: newPositiveKarma,
+                        timestamp: new Date()
+                    }, { transaction });
 
-            const chakraProfile = await ChakraProfile.findOne({
-                where: {
-                    lifeId: affectedLifeId,
-                    chakra: affectedChakra
+                    console.log(`⬆️ Positive karma updated for ${influencerLifeId} (interaction ID: ${id}, newPositiveKarmaAccrued: ${newPositiveKarmaAccrued}, chakra: ${affectedChakra})`);
                 }
-            });
-
-            if (!chakraProfile || !chakraProfile.openedBy.includes(influencerLifeId)) {
-                await interaction.update({
-                    positiveKarmaAccrued: 0,
-                    karmaType: 'resolved',
-                    timestamp: new Date()
-                });
-                continue;
-            }
-
-            const influencerKarma = await KarmaBalance.findOne({
-                where: { lifeId: influencerLifeId },
-                order: [['timestamp', 'DESC']]
-            });
-
-            if (influencerKarma) {
-                const newPositiveKarmaAccrued = (interaction.positiveKarmaAccrued || 0) + 1;
-                await interaction.update({
-                    positiveKarmaAccrued: newPositiveKarmaAccrued,
-                    timestamp: new Date()
-                });
-
-                await influencerKarma.update({
-                    positiveKarma: (influencerKarma.positiveKarma || 0) + 1,
-                    timestamp: new Date()
-                });
-                console.log(`⬆️ Positive karma for ${influencerLifeId} (interaction ID: ${interaction.id})`);
+            } else {
+                console.warn(`No KarmaBalance found for influencerLifeId: ${influencerLifeId}, interaction ID: ${id}, chakra: ${affectedChakra}`);
             }
         }
 
+        await transaction.commit();
+        console.log('✅ Karma cronjob completed successfully');
     } catch (err) {
-        console.error('❌ Karma cronjob failed:', err.stack);
+        if (transaction) await transaction.rollback();
+        console.error('❌ Karma cronjob failed:', err.message, err.stack);
         throw err;
     }
 }

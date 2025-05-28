@@ -31,6 +31,10 @@ const KarmaInteraction = sequelize.define('KarmaInteraction', {
         type: DataTypes.ENUM('positive', 'negative', 'resolved'),
         allowNull: true,
     },
+    originalKarmaType: {
+        type: DataTypes.ENUM('positive', 'negative'),
+        allowNull: true,
+    },
     affectedChakra: {
         type: DataTypes.ENUM(...Object.keys(chakraEnumMap)),
         allowNull: true,
