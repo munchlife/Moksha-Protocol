@@ -49,24 +49,43 @@ const KarmaInteraction = sequelize.define('KarmaInteraction', {
         allowNull: true,
         defaultValue: 0,
     },
+    status: {
+        type: DataTypes.ENUM('active', 'superseded', 'resolved'),
+        defaultValue: 'active',
+        allowNull: false
+    },
     timestamp: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+        allowNull: false
+    },
+    createdAt: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW,
         allowNull: false
     }
 }, {
+    // --- UPDATED INDEXES BLOCK ---
     indexes: [
         {
             unique: true,
-            fields: ['affectedLifeId', 'influencerLifeId', 'affectedChakra'],
+            fields: ['affectedLifeId', 'influencerLifeId', 'affectedChakra', 'karmaType'],
+            // The 'where' condition now specifically targets 'active' status
             where: {
-                karmaType: ['positive', 'negative']
+                status: 'active' // Ensure uniqueness only for active interactions
             },
-            name: 'unique_affected_influencer_chakra_active'
+            name: 'unique_active_karma_interaction' // A more descriptive name
         }
     ],
     tableName: 'KarmaInteractions',
     timestamps: false
+});
+
+KarmaInteraction.beforeCreate((interaction, options) => {
+    interaction.createdAt = new Date();
+    if (!interaction.timestamp) {
+        interaction.timestamp = new Date();
+    }
 });
 
 module.exports = KarmaInteraction;
