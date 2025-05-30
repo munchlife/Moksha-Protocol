@@ -1,5 +1,4 @@
 const { KarmaBalance, KarmaInteraction, ChakraProfile } = require('./database/associations.js');
-const { chakraBalances } = require('./chakraBalances.js');
 const { Sequelize, Op } = require('sequelize');
 const sequelize = require('./database/database.js');
 
@@ -9,12 +8,13 @@ async function mineKarma() {
     try {
         transaction = await sequelize.transaction();
 
+        // Retrieve all active karma interactions, ordered by original creation time
         const interactions = await KarmaInteraction.findAll({
             where: {
                 status: 'active',
                 karmaType: { [Op.in]: ['positive', 'negative'] }
             },
-            order: [['timestamp', 'ASC']],
+            order: [['createdAt', 'ASC']],
             transaction
         });
         console.log('Active interactions fetched:', interactions.length);
@@ -25,18 +25,23 @@ async function mineKarma() {
         const now = new Date();
         const msInHour = 1000 * 60 * 60;
 
+        // Process each active interaction
         for (const interaction of interactionsToProcess) {
             const { influencerLifeId, affectedLifeId, affectedChakra, karmaType, id } = interaction;
 
-            const lastProcessedTime = new Date(interaction.timestamp);
+            // Get the timestamp marking the last successful accrual point
+            const lastAccrualTime = new Date(interaction.timestamp);
 
-            const hoursElapsedSinceLastProcess = Math.floor((now - lastProcessedTime) / msInHour);
+            // Calculate how many full hours have passed since the last accrual point
+            const hoursToAccrue = Math.floor((now.getTime() - lastAccrualTime.getTime()) / msInHour);
 
-            if (hoursElapsedSinceLastProcess < 1) {
-                console.log(`Skipping interaction ID: ${id}, less than 1 full hour elapsed since last process (timestamp: ${interaction.timestamp})`);
+            // Skip if no full hour has passed since the last accrual
+            if (hoursToAccrue < 1) {
+                console.log(`Skipping interaction ID: ${id}, less than 1 full hour elapsed since last accrual (lastAccrualTime: ${lastAccrualTime.toISOString()})`);
                 continue;
             }
 
+            // Fetch the ChakraProfile to validate active status
             const chakraProfile = await ChakraProfile.findOne({
                 where: {
                     lifeId: affectedLifeId,
@@ -51,59 +56,45 @@ async function mineKarma() {
                 (!isNegative && chakraProfile.openedBy.includes(influencerLifeId))
             );
 
+            // Resolve interaction if profile state is no longer valid
             if (!isValidProfile) {
                 await interaction.update({
                     positiveKarmaAccrued: 0,
                     negativeKarmaAccrued: 0,
                     status: 'resolved',
-                    timestamp: now
+                    timestamp: now // Update timestamp even for resolved to prevent re-selection
                 }, { transaction });
                 console.log(`Resolved interaction ID: ${id} for influencerLifeId: ${influencerLifeId}, chakra: ${affectedChakra} due to invalid profile state.`);
                 continue;
             }
 
-            let accruedUnits = 0;
-            const newAccrualTimestamp = now;
+            // Calculate the new timestamp for the interaction, marking the end of the last accrued hour
+            const newTimestampForInteraction = new Date(lastAccrualTime.getTime() + (hoursToAccrue * msInHour));
 
+            // Accrue karma based on its type
             if (isNegative) {
-                for (let i = 0; i < hoursElapsedSinceLastProcess; i++) {
-                    const newNegativeKarmaAccrued = (interaction.negativeKarmaAccrued || 0) + 1;
-                    await interaction.update({
-                        negativeKarmaAccrued: newNegativeKarmaAccrued,
-                    }, { transaction });
+                // Add accrued hours to the negative karma total
+                interaction.negativeKarmaAccrued = (interaction.negativeKarmaAccrued || 0) + hoursToAccrue;
 
-                    await KarmaBalance.create({
-                        lifeId: influencerLifeId,
-                        positiveKarma: 0,
-                        negativeKarma: 1,
-                        netKarma: -1,
-                        note: `Hourly negative karma accrual for interaction ${id} (${i + 1}/${hoursElapsedSinceLastProcess}hr)`,
-                        timestamp: newAccrualTimestamp
-                    }, { transaction });
-                    accruedUnits++;
-                }
-                console.log(`⬇️ Negative karma accrued for ${influencerLifeId} (interaction ID: ${id}, ${accruedUnits} units, newTotal: ${interaction.negativeKarmaAccrued + accruedUnits}, chakra: ${affectedChakra})`);
-                await interaction.update({ timestamp: newAccrualTimestamp }, { transaction });
+                console.log(`⬇️ Negative karma accrued for ${influencerLifeId} (interaction ID: ${id}, ${hoursToAccrue} units, newTotal: ${interaction.negativeKarmaAccrued}, chakra: ${affectedChakra})`);
 
-            } else {
-                for (let i = 0; i < hoursElapsedSinceLastProcess; i++) {
-                    const newPositiveKarmaAccrued = (interaction.positiveKarmaAccrued || 0) + 1;
-                    await interaction.update({
-                        positiveKarmaAccrued: newPositiveKarmaAccrued,
-                    }, { transaction });
+                // Update the interaction record in the database
+                await interaction.update({
+                    negativeKarmaAccrued: interaction.negativeKarmaAccrued,
+                    timestamp: newTimestampForInteraction // Update timestamp to the new accrual point
+                }, { transaction });
 
-                    await KarmaBalance.create({
-                        lifeId: influencerLifeId,
-                        positiveKarma: 1,
-                        negativeKarma: 0,
-                        netKarma: 1,
-                        note: `Hourly positive karma accrual for interaction ${id} (${i + 1}/${hoursElapsedSinceLastProcess}hr)`,
-                        timestamp: newAccrualTimestamp
-                    }, { transaction });
-                    accruedUnits++;
-                }
-                console.log(`⬆️ Positive karma accrued for ${influencerLifeId} (interaction ID: ${id}, ${accruedUnits} units, newTotal: ${interaction.positiveKarmaAccrued + accruedUnits}, chakra: ${affectedChakra})`);
-                await interaction.update({ timestamp: newAccrualTimestamp }, { transaction });
+            } else { // Positive Karma
+                // Add accrued hours to the positive karma total
+                interaction.positiveKarmaAccrued = (interaction.positiveKarmaAccrued || 0) + hoursToAccrue;
+
+                console.log(`⬆️ Positive karma accrued for ${influencerLifeId} (interaction ID: ${id}, ${hoursToAccrue} units, newTotal: ${interaction.positiveKarmaAccrued}, chakra: ${affectedChakra})`);
+
+                // Update the interaction record in the database
+                await interaction.update({
+                    positiveKarmaAccrued: interaction.positiveKarmaAccrued,
+                    timestamp: newTimestampForInteraction // Update timestamp to the new accrual point
+                }, { transaction });
             }
         }
 
