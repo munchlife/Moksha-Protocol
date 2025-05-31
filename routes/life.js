@@ -331,7 +331,7 @@ router.get('/search', async (req, res) => {
 });
 
 // GET: Retrieve the calculated netKarma for a specific lifeId (as an influencer)
-router.get('/get-net-karma/:lifeId', authenticateToken, verifyLifeId, async (req, res) => {
+router.get('/get-net-karma/:lifeId', async (req, res) => {
     try {
         console.log(`Attempting to retrieve net karma for lifeId: ${req.params.lifeId}`);
         const userLifeId = parseInt(req.params.lifeId, 10);
@@ -396,6 +396,7 @@ router.get('/get-net-karma/:lifeId', authenticateToken, verifyLifeId, async (req
 router.get('/activity-feed/entry/:interactionId', async (req, res) => {
     let transaction;
     try {
+        console.log('Fetching activity feed entry for interactionId:', req.params.interactionId);
         transaction = await sequelize.transaction();
 
         const { interactionId } = req.params;
@@ -406,6 +407,7 @@ router.get('/activity-feed/entry/:interactionId', async (req, res) => {
             return res.status(400).json({ error: 'interactionId must be a valid integer' });
         }
 
+        // Fetch the KarmaInteraction record by its ID
         const interaction = await KarmaInteraction.findByPk(parsedInteractionId, {
             include: [
                 {
@@ -423,8 +425,8 @@ router.get('/activity-feed/entry/:interactionId', async (req, res) => {
         });
 
         if (!interaction) {
-            console.warn(`Karma balance entry not found for ID: ${parsedInteractionId}`);
-            return res.status(404).json({ error: 'Karma balance entry not found.' });
+            console.warn(`Karma interaction entry not found for ID: ${parsedInteractionId}`);
+            return res.status(404).json({ error: 'Karma interaction entry not found.' });
         }
 
         const sender = interaction.influencer;
@@ -434,63 +436,69 @@ router.get('/activity-feed/entry/:interactionId', async (req, res) => {
             return res.status(404).json({ error: 'Related user data missing for this entry.' });
         }
 
-        // Fetch KarmaBalance for note with a time range
-        const karmaBalance = await KarmaBalance.findOne({
+        // Fetch the KarmaBalance entry that holds the original note for the affected user
+        const karmaBalanceNoteEntry = await KarmaBalance.findOne({
             where: {
                 lifeId: interaction.affectedLifeId,
                 timestamp: {
                     [Op.between]: [
-                        sequelize.literal(`'${interaction.timestamp.toISOString()}'::timestamp - INTERVAL '1 second'`),
-                        sequelize.literal(`'${interaction.timestamp.toISOString()}'::timestamp + INTERVAL '1 second'`)
+                        new Date(new Date(interaction.createdAt).getTime() - 1000), // 1 second before createdAt
+                        new Date(new Date(interaction.createdAt).getTime() + 1000)  // 1 second after createdAt
                     ]
-                }
+                },
+                netKarma: 0 // Filter for the note-carrying entry
             },
             order: [['timestamp', 'ASC']], // Get the closest timestamp
             transaction
         });
 
-        if (!karmaBalance) {
-            console.warn(`No KarmaBalance found for interaction ${interaction.id}, affectedLifeId: ${interaction.affectedLifeId}, timestamp: ${interaction.timestamp}`);
+        if (!karmaBalanceNoteEntry) {
+            console.warn(`No specific KarmaBalance (note) entry found for interaction ${interaction.id}, affectedLifeId: ${interaction.affectedLifeId}, createdAt: ${interaction.createdAt}`);
         } else {
-            console.log(`Found KarmaBalance for interaction ${interaction.id}, note: ${karmaBalance.note}`);
+            console.log(`Found KarmaBalance note entry for interaction ${interaction.id}, note: ${karmaBalanceNoteEntry.note}`);
         }
 
         const chakra = interaction.affectedChakra;
-        let chakraBalance;
+        let chakraBalanceState;
         let creditOrDebt;
 
-        // Use originalKarmaType or karmaType
+        // Determine chakra balance state and credit/debt based on original karma type
         const effectiveKarmaType = interaction.originalKarmaType || interaction.karmaType;
         if (effectiveKarmaType === 'positive') {
-            chakraBalance = chakraBalances[chakra]?.positive;
+            chakraBalanceState = chakraBalances[chakra]?.positive;
             creditOrDebt = 'credit';
         } else if (effectiveKarmaType === 'negative') {
-            chakraBalance = chakraBalances[chakra]?.negative;
+            chakraBalanceState = chakraBalances[chakra]?.negative;
             creditOrDebt = 'debt';
         } else {
-            chakraBalance = 'Unknown State';
+            chakraBalanceState = 'Unknown State';
             creditOrDebt = 'neutral';
         }
 
-        const note = karmaBalance?.note || "No specific note provided for this interaction.";
+        // Use the note from the retrieved KarmaBalance entry, or a default
+        const note = karmaBalanceNoteEntry?.note || "No specific note provided for this interaction.";
 
         if (!chakraBalances[chakra]) {
             console.warn(`Invalid chakra '${chakra}' for interaction ID: ${interaction.id}.`);
             return res.status(400).json({ error: `Invalid chakra: ${chakra}` });
         }
 
-        const entryMessage = `${sender.email} put ${chakraBalance || 'unknown'} in ${receiver.email}'s ${chakra} and started earning ${creditOrDebt}.`;
+        // Construct a descriptive message for the entry
+        const entryMessage = `${sender.email} put ${chakraBalanceState || 'unknown'} in ${receiver.email}'s ${chakra} and started earning ${creditOrDebt}.`;
 
         const finalResponseData = {
             id: interaction.id,
             senderEmail: sender.email,
             receiverEmail: receiver.email,
             chakra,
-            chakraBalance: chakraBalance || 'Unknown State',
+            chakraBalance: chakraBalanceState || 'Unknown State',
             creditOrDebt,
-            timestamp: interaction.timestamp,
+            timestamp: interaction.createdAt.toISOString(), // Original creation timestamp for the feed entry
             note,
-            entryMessage
+            entryMessage,
+            positiveKarmaAccrued: interaction.positiveKarmaAccrued || 0, // Current total positive accrued
+            negativeKarmaAccrued: interaction.negativeKarmaAccrued || 0, // Current total negative accrued
+            currentAccrualTimestamp: interaction.timestamp.toISOString() // Last time karma was accrued by miner
         };
 
         console.log('Backend /activity-feed/entry/:interactionId response:', finalResponseData);
@@ -1031,12 +1039,12 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, verifySub
         await transaction.commit();
         console.log('Transaction committed successfully.');
 
-        try {
-            await karmaTagger(influencerLifeId, affectedLifeId, chakra, balanceDirection);
-            console.log('karmaTagger called successfully.');
-        } catch (taggerError) {
-            console.error('karmaTagger error (non-critical):', taggerError.message, taggerError.stack);
-        }
+        // try {
+        //     await karmaTagger(influencerLifeId, affectedLifeId, chakra, balanceDirection);
+        //     console.log('karmaTagger called successfully.');
+        // } catch (taggerError) {
+        //     console.error('karmaTagger error (non-critical):', taggerError.message, taggerError.stack);
+        // }
 
         // Prepare and send API response
         const response = {

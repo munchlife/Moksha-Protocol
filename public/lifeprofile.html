@@ -146,6 +146,23 @@
             font-size: 16px;
             margin-bottom: 5px;
         }
+        /* Style for Net Karma display */
+        #net-karma-display {
+            font-size: 20px;
+            font-weight: bold;
+            color: #7FFF00; /* Bright color for karma */
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+        /* Style for net karma loading/error */
+        #net-karma-loading, #net-karma-error {
+            font-size: 14px;
+            margin-top: 5px;
+            color: #FFD700;
+        }
+        #net-karma-error {
+            color: #FF4500;
+        }
 
         .ledger-container {
             width: 100%;
@@ -222,7 +239,7 @@
         <div id="profile-info">
             <h3 id="profile-name"></h3>
             <p>Email: <span id="profile-email"></span></p>
-        </div>
+            <div id="net-karma-display"></div> <div id="net-karma-loading" class="loading" style="display: none;">Loading Net Karma...</div> <div id="net-karma-error" class="error" style="display: none;"></div> </div>
 
         <section class="ledger-container">
             <h2>Karma Ledger for <span id="profile-ledger-name"></span></h2>
@@ -244,8 +261,8 @@
 <script>
     // Get references to screen containers
     const searchScreen = document.getElementById('search-screen');
-    const profileListScreen = document.getElementById('profile-list-screen'); // New screen
-    const specificProfileScreen = document.getElementById('specific-profile-screen'); // Renamed from resultsScreen
+    const profileListScreen = document.getElementById('profile-list-screen');
+    const specificProfileScreen = document.getElementById('specific-profile-screen');
 
     // Elements for Search Screen
     const searchInput = document.getElementById('search-input');
@@ -255,21 +272,24 @@
 
     // Elements for Profile List Screen
     const profileResultsList = document.getElementById('profile-results-list');
-    const backToListSearchScreenButton = document.getElementById('back-to-search-list-screen'); // New button
+    const backToListSearchScreenButton = document.getElementById('back-to-search-list-screen');
 
     // Elements for Specific Profile Info Screen
     const profileNameSpan = document.getElementById('profile-name');
     const profileEmailSpan = document.getElementById('profile-email');
+    const netKarmaDisplay = document.getElementById('net-karma-display'); // New element
+    const netKarmaLoading = document.getElementById('net-karma-loading'); // New element
+    const netKarmaError = document.getElementById('net-karma-error'); // New element
     const profileLedgerNameSpan = document.getElementById('profile-ledger-name');
     const ledgerErrorDiv = document.getElementById('ledger-error');
     const ledgerEntriesDiv = document.getElementById('ledger-entries');
     const noEntriesDiv = document.getElementById('no-entries');
     const ledgerLoadingDiv = document.getElementById('ledger-loading');
-    const backToListButton = document.getElementById('back-to-list-button'); // New button
+    const backToListButton = document.getElementById('back-to-list-button');
     const newSearchButton = document.getElementById('new-search-button');
 
-    let lastSearchQuery = ''; // Store the last query for "Back to Search Results"
-    let lastSearchResults = []; // Store the list of profiles from the last search
+    let lastSearchQuery = '';
+    let lastSearchResults = [];
 
     // Function to show a specific screen and hide others
     function showScreen(screenId) {
@@ -283,30 +303,33 @@
             // Clear specific profile data and ledger when going back to search
             profileNameSpan.textContent = '';
             profileEmailSpan.textContent = '';
+            netKarmaDisplay.textContent = ''; // Clear net karma
+            netKarmaLoading.style.display = 'none'; // Hide net karma loading
+            netKarmaError.style.display = 'none'; // Hide net karma error
             profileLedgerNameSpan.textContent = '';
             ledgerEntriesDiv.innerHTML = '';
             noEntriesDiv.style.display = 'none';
             ledgerErrorDiv.style.display = 'none';
             // Also clear profile list
             profileResultsList.innerHTML = '';
-            lastSearchResults = []; // Reset stored results
-            lastSearchQuery = ''; // Reset stored query
+            lastSearchResults = [];
+            lastSearchQuery = '';
         } else if (screenId === 'profile-list') {
             profileListScreen.style.display = 'flex';
         } else if (screenId === 'specific-profile') {
             specificProfileScreen.style.display = 'flex';
             // Show/hide 'Back to Search Results' button based on previous flow
             if (lastSearchResults.length > 1) {
-                backToListButton.style.display = 'block'; // Only show if we came from a list
+                backToListButton.style.display = 'block';
             } else {
-                backToListButton.style.display = 'none'; // Hide if direct single search
+                backToListButton.style.display = 'none';
             }
         }
     }
 
     // Displays the list of profiles
     function displayProfileList(lives) {
-        profileResultsList.innerHTML = ''; // Clear previous list
+        profileResultsList.innerHTML = '';
         if (lives.length === 0) {
             profileResultsList.innerHTML = '<p style="color: #ccc;">No profiles found matching your search.</p>';
             return;
@@ -320,7 +343,6 @@
                 <div class="email">${life.email}</div>
             `;
             div.onclick = async () => {
-                // When a list item is clicked, display its details
                 await displaySpecificProfile(life);
                 showScreen('specific-profile');
             };
@@ -333,19 +355,62 @@
         profileNameSpan.textContent = `${life.firstName} ${life.lastName}`;
         profileEmailSpan.textContent = life.email;
         profileLedgerNameSpan.textContent = `${life.firstName} ${life.lastName}`;
+        await fetchNetKarma(life.lifeId); // New: Fetch net karma
         await fetchLifeActivityFeed(life.lifeId);
+    }
+
+    // New: Function to fetch and display net karma
+    async function fetchNetKarma(lifeId) {
+        netKarmaDisplay.textContent = ''; // Clear previous data
+        netKarmaError.style.display = 'none';
+        netKarmaLoading.style.display = 'block';
+
+        try {
+            console.log('Fetching net karma for lifeId:', lifeId);
+            const token = localStorage.getItem('token'); // Assuming token is stored in localStorage
+            if (!token) {
+                throw new Error('Authentication token not found. Please log in.');
+            }
+
+            const response = await fetch(`${window.API_BASE_URL}/life/get-net-karma/${lifeId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` // Include JWT token
+                }
+            });
+
+            const result = await response.json();
+            console.log('Net karma response:', result);
+
+            netKarmaLoading.style.display = 'none';
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch net karma.');
+            }
+
+            netKarmaDisplay.textContent = `Net Karma: ${result.netKarma}`;
+            // Optional: style net karma based on value
+            netKarmaDisplay.style.color = result.netKarma >= 0 ? '#7FFF00' : '#FF4500';
+
+        } catch (error) {
+            console.error('Fetch net karma error:', error);
+            netKarmaError.textContent = error.message || 'Error loading net karma.';
+            netKarmaError.style.display = 'block';
+            netKarmaLoading.style.display = 'none';
+        }
     }
 
     async function searchLifeProfile(query) {
         searchErrorDiv.style.display = 'none';
         searchLoadingDiv.style.display = 'block';
-        lastSearchQuery = query; // Store query for potential back navigation
+        lastSearchQuery = query;
 
         if (!query.trim()) {
             searchErrorDiv.textContent = 'Please enter a name or email to search.';
             searchErrorDiv.style.display = 'block';
             searchLoadingDiv.style.display = 'none';
-            return; // No return value, just handle UI
+            return;
         }
 
         try {
@@ -364,19 +429,17 @@
                 throw new Error(result.error || 'Failed to search for life profile.');
             }
 
-            const lives = result.lives || []; // Backend now always returns 'lives' array
-            lastSearchResults = lives; // Store results for potential back navigation
+            const lives = result.lives || [];
+            lastSearchResults = lives;
 
             if (lives.length === 0) {
                 searchErrorDiv.textContent = 'No matching life profiles found.';
                 searchErrorDiv.style.display = 'block';
-                return; // Stay on search screen with error
+                return;
             } else if (lives.length === 1) {
-                // Directly show specific profile if only one result
                 await displaySpecificProfile(lives[0]);
                 showScreen('specific-profile');
             } else {
-                // Show list of profiles if multiple results
                 displayProfileList(lives);
                 showScreen('profile-list');
             }
@@ -471,9 +534,9 @@
 
         if (query) {
             searchInput.value = query;
-            await searchLifeProfile(query); // This function now handles screen transitions
+            await searchLifeProfile(query);
         } else {
-            showScreen('search'); // Default to search screen
+            showScreen('search');
         }
     });
 </script>
