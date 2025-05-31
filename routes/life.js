@@ -379,8 +379,8 @@ router.get('/get-net-karma/:lifeId', authenticateToken, verifyLifeId, async (req
 
         res.status(200).json({
             lifeId: userLifeId,
-            positiveKarma: totalPositiveAccrued, // This now reflects karma accrued via interactions
-            negativeKarma: totalNegativeAccrued, // This now reflects karma accrued via interactions
+            positiveKarma: totalPositiveAccrued, // This reflects karma accrued via interactions
+            negativeKarma: totalNegativeAccrued, // This reflects karma accrued via interactions
             netKarma: calculatedNetKarma,
             timestamp: latestInteractionTimestamp ? latestInteractionTimestamp.timestamp : null, // Timestamp of the latest relevant activity
             message: (totalPositiveAccrued === 0 && totalNegativeAccrued === 0) ? 'No active karma balance found, net karma is 0.' : undefined // Clearer message
@@ -640,9 +640,17 @@ router.get('/activity-feed/:lifeId', async (req, res) => {
 
 // GET: Get global activity feed
 router.get('/global-activity-feed', async (req, res) => {
+    let transaction;
     try {
-        // Fetch all karma interactions
+        console.log('Fetching global activity feed...');
+        transaction = await sequelize.transaction();
+
+        // Fetch all karma interactions, ordered by their original creation time
         const interactions = await KarmaInteraction.findAll({
+            where: {
+                // Only show interactions that have a positive or negative original type
+                originalKarmaType: { [Op.in]: ['positive', 'negative'] }
+            },
             include: [
                 {
                     model: LifeAccount,
@@ -655,70 +663,101 @@ router.get('/global-activity-feed', async (req, res) => {
                     attributes: ['email', 'firstName', 'lastName']
                 }
             ],
-            order: [['timestamp', 'DESC']],
-            limit: 100 // Limit to recent interactions, adjust as needed
+            order: [['createdAt', 'DESC'], ['id', 'DESC']], // Order by createdAt for fixed feed entries
+            limit: 100, // Limit to recent interactions
+            transaction // Include transaction
         });
 
-        // Build ledger entries
         const ledger = [];
+
+        console.log(`Found ${interactions.length} KarmaInteraction records for global feed`);
+        interactions.forEach(interaction => {
+            console.log(`Raw interaction: ID=${interaction.id}, Chakra=${interaction.affectedChakra}, KarmaType=${interaction.originalKarmaType}, CreatedAt=${interaction.createdAt}, LastUpdateTimestamp=${interaction.timestamp}`);
+        });
+
+        // Process each interaction to build the global feed
         for (const interaction of interactions) {
+            console.log(`Processing interaction ID: ${interaction.id}, originalKarmaType: ${interaction.originalKarmaType}, chakra: ${interaction.affectedChakra}, createdAt: ${interaction.createdAt}`);
+
             const sender = interaction.influencer;
             const receiver = interaction.affected;
-            if (!sender || !receiver) continue;
+            if (!sender || !receiver) {
+                console.warn(`Skipping interaction ${interaction.id}: Missing influencer or affected LifeAccount.`);
+                continue;
+            }
 
-            const chakra = interaction.affectedChakra; // Use the specific chakra from the interaction
-            if (!chakraBalances[chakra]) { // Ensure chakra is valid
+            const chakra = interaction.affectedChakra;
+            if (!chakraBalances[chakra]) { // Ensure chakra is valid based on your mapping
                 console.warn(`Skipping interaction ${interaction.id}: Invalid or missing chakra '${chakra}'.`);
                 continue;
             }
 
-            const positiveState = chakraBalances[chakra].positive;
-            const negativeState = chakraBalances[chakra].negative;
-
-            let chakraBalanceState = null;
-
-            // Fetch the KarmaBalance for the affected user
-            const karmaBalance = await KarmaBalance.findOne({
-                where: { lifeId: interaction.affectedLifeId },
-                order: [['timestamp', 'DESC']] // Still getting the latest balance
+            // Retrieve the KarmaBalance entry that holds the original note for the affected user
+            const karmaBalanceNoteEntry = await KarmaBalance.findOne({
+                where: {
+                    lifeId: interaction.affectedLifeId,
+                    timestamp: {
+                        [Op.between]: [
+                            new Date(new Date(interaction.createdAt).getTime() - 1000), // 1 second before createdAt
+                            new Date(new Date(interaction.createdAt).getTime() + 1000)  // 1 second after createdAt
+                        ]
+                    },
+                    netKarma: 0 // Filter for the specific KarmaBalance entry with the note for affected life
+                },
+                order: [['timestamp', 'ASC']], // Get the closest timestamp if multiple
+                transaction // Include transaction
             });
 
-            if (karmaBalance) {
-                const field = `${chakra.toLowerCase()}Balance`;
-                const storedBalance = karmaBalance.get(field);
-
-                if (storedBalance === positiveState || storedBalance === negativeState) {
-                    chakraBalanceState = storedBalance;
-                } else {
-                    // Stored balance is invalid or null/undefined, infer based on interaction karmaType
-                    chakraBalanceState = interaction.karmaType === 'positive'
-                        ? positiveState
-                        : negativeState;
-                }
+            if (!karmaBalanceNoteEntry) {
+                console.warn(`No specific KarmaBalance (note) entry found for interaction ${interaction.id}, affectedLifeId: ${interaction.affectedLifeId}, createdAt: ${interaction.createdAt}`);
             } else {
-                // No KarmaBalance record found, infer based on interaction karmaType
-                chakraBalanceState = interaction.karmaType === 'positive'
-                    ? positiveState
-                    : negativeState;
+                console.log(`Found KarmaBalance note entry for interaction ${interaction.id}, note: ${karmaBalanceNoteEntry.note}`);
             }
 
-            const isNegative = chakraBalanceState === negativeState;
-            const creditOrDebt = isNegative ? 'debt' : 'credit';
+            let chakraBalanceState;
+            let creditOrDebt;
 
+            // Determine the chakra balance state and credit/debt based on the interaction's original karma type
+            const effectiveKarmaType = interaction.originalKarmaType;
+            if (effectiveKarmaType === 'positive') {
+                chakraBalanceState = chakraBalances[chakra]?.positive;
+                creditOrDebt = 'credit';
+            } else if (effectiveKarmaType === 'negative') {
+                chakraBalanceState = chakraBalances[chakra]?.negative;
+                creditOrDebt = 'debt';
+            } else {
+                console.warn(`Skipping interaction ${interaction.id}: Invalid originalKarmaType '${effectiveKarmaType}'.`);
+                continue;
+            }
+
+            if (!chakraBalanceState) {
+                console.warn(`Skipping interaction ${interaction.id}: Invalid chakra balance state derived for chakra '${chakra}'.`);
+                continue;
+            }
+
+            // Use the note from the retrieved KarmaBalance entry, or a default
+            const note = karmaBalanceNoteEntry?.note || 'No specific note provided';
+
+            // Construct the ledger entry for the global feed
             ledger.push({
-                id: interaction.id, // Ensure ID is passed for linking
+                id: interaction.id,
                 senderEmail: sender.email,
                 receiverEmail: receiver.email,
                 chakra,
                 chakraBalance: chakraBalanceState,
                 creditOrDebt,
-                timestamp: interaction.timestamp,
+                timestamp: interaction.createdAt.toISOString(), // Display the original creation timestamp
+                note
             });
+            console.log(`Added global ledger entry: ID=${interaction.id}, Chakra=${chakra}, Balance=${chakraBalanceState}, Note=${note}, FeedTimestamp=${interaction.createdAt.toISOString()}`);
         }
 
+        await transaction.commit(); // Commit the transaction
+        console.log(`Returning global activity feed: ${ledger.length} entries`);
         return res.json({ ledger });
     } catch (err) {
-        console.error('Backend: Error fetching global activity feed:', err);
+        if (transaction) await transaction.rollback(); // Rollback on error
+        console.error('Backend: Error fetching global activity feed:', err.message, err.stack); // More detailed error logging
         return res.status(500).json({ error: err.message || 'Server error' });
     }
 });
@@ -992,12 +1031,12 @@ router.post('/update-chakra-balance', authenticateToken, verifyLifeId, verifySub
         await transaction.commit();
         console.log('Transaction committed successfully.');
 
-        // try {
-        //     await karmaTagger(influencerLifeId, affectedLifeId, chakra, balanceDirection);
-        //     console.log('karmaTagger called successfully.');
-        // } catch (taggerError) {
-        //     console.error('karmaTagger error (non-critical):', taggerError.message, taggerError.stack);
-        // }
+        try {
+            await karmaTagger(influencerLifeId, affectedLifeId, chakra, balanceDirection);
+            console.log('karmaTagger called successfully.');
+        } catch (taggerError) {
+            console.error('karmaTagger error (non-critical):', taggerError.message, taggerError.stack);
+        }
 
         // Prepare and send API response
         const response = {
