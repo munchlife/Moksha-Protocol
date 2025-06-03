@@ -1,8 +1,9 @@
 // File: karmaVirality.js
 
-const { LifeAccount, ChakraProfile } = require('./database/associations.js');
+const { LifeAccount, ChakraProfile, KarmaInteraction } = require('./database/associations.js');
 const nodemailer = require('nodemailer');
-const { chakraBalances } = require('./chakraBalances.js'); // Import chakraBalances
+const { chakraBalances } = require('./chakraBalances.js');
+const { Op } = require('sequelize');
 
 const {
     AHASEND_SENDER_EMAIL,
@@ -17,10 +18,9 @@ const capitalizeFirstLetter = (string) => {
     return string.charAt(0).toUpperCase() + string.slice(1);
 };
 
-// Karma Tagger Function: Responsible for sending karma-related emails when one life tags another
+// Karma Tagger Function: Sends karma-related emails when one life tags another
 const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDirection) => {
     try {
-        // Ensure lifeIds are integers
         influencerLifeId = parseInt(influencerLifeId, 10);
         affectedLifeId = parseInt(affectedLifeId, 10);
 
@@ -29,7 +29,6 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             return { error: 'Both influencerLifeId and affectedLifeId must be valid integers.' };
         }
 
-        // Retrieve the affected life and influencer details
         const affectedLife = await LifeAccount.findOne({ where: { lifeId: affectedLifeId } });
         const influencerLife = await LifeAccount.findOne({ where: { lifeId: influencerLifeId } });
 
@@ -38,7 +37,6 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             return { error: 'Life account not found for the given lifeIds.' };
         }
 
-        // Retrieve chakra profile of affected life for the specific chakra
         const chakraProfile = await ChakraProfile.findOne({
             where: { lifeId: affectedLifeId, chakra: chakraType }
         });
@@ -48,10 +46,8 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             return { error: 'Chakra profile not found for the given lifeId and chakra type.' };
         }
 
-        // Determine karma type (positive/negative)
         const karmaType = karmaDirection > 0 ? 'positive' : 'negative';
 
-        // Get the specific chakra balance description (e.g., "Groundedness", "Fear")
         let chakraBalanceDescription = '';
         if (chakraBalances[chakraType]) {
             chakraBalanceDescription = karmaDirection > 0
@@ -62,7 +58,6 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             chakraBalanceDescription = karmaDirection > 0 ? 'positive energy' : 'negative energy';
         }
 
-        // Basic check for missing environment variables before sending
         if (!AHASEND_SENDER_EMAIL || !AHASEND_SENDER_NAME || !AHASEND_SMTP_USERNAME || !AHASEND_SMTP_PASSWORD) {
             console.error('karmaTagger config error: Nodemailer (SMTP) configuration is missing in environment variables.', {
                 senderEmail: !!AHASEND_SENDER_EMAIL,
@@ -70,10 +65,9 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
                 smtpUsername: !!AHASEND_SMTP_USERNAME,
                 smtpPassword: !!AHASEND_SMTP_PASSWORD
             });
-            return { error: 'Email sender configuration (Sender Email, Sender Name, SMTP Username, or SMTP Password) is missing in environment variables.' };
+            return { error: 'Email sender configuration is missing in environment variables.' };
         }
 
-        // --- Nodemailer Transporter Configuration ---
         const transporter = nodemailer.createTransport({
             host: 'send.ahasend.com',
             port: 587,
@@ -84,21 +78,18 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             }
         });
 
-        // Capitalize first letter of names for the email subject
         const capitalizedAffectedFirstName = capitalizeFirstLetter(affectedLife.firstName);
         const capitalizedAffectedLastName = capitalizeFirstLetter(affectedLife.lastName);
 
-        // --- UPDATED EMAIL PAYLOAD ---
         const emailSubject = `${capitalizedAffectedFirstName} ${capitalizedAffectedLastName} tagged you as putting ${chakraBalanceDescription} in their ${chakraType} chakra using the Moksha Protocol and you started earning ${karmaType} karma.`;
         const emailTextContent = "Review your chakra karma balance by signing in at https://moksha.money.";
 
         const mailOptions = {
             from: `"${AHASEND_SENDER_NAME}" <${AHASEND_SENDER_EMAIL}>`,
-            to: influencerLife.email, // Send email TO the influencer
+            to: influencerLife.email,
             subject: emailSubject,
             text: emailTextContent,
         };
-        // --- END UPDATED EMAIL PAYLOAD ---
 
         console.log('Attempting to send karmaTagger email via Nodemailer:', {
             from: mailOptions.from,
@@ -106,7 +97,6 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
             subject: mailOptions.subject
         });
 
-        // Send email using Nodemailer
         const info = await transporter.sendMail(mailOptions);
         console.log('karmaTagger email sent successfully (Nodemailer):', { messageId: info.messageId });
 
@@ -126,10 +116,9 @@ const karmaTagger = async (influencerLifeId, affectedLifeId, chakraType, karmaDi
     }
 };
 
-// Karma Scaler Function: Sends email reminders for outstanding negative karma every 28 days
-const karmaScaler = async (influencerLifeId, chakraType) => {
+// Karma Scaler Function: Sends email reminders for outstanding negative karma interactions every 28 days
+const karmaScaler = async (influencerLifeId) => {
     try {
-        // Ensure influencerLifeId is an integer
         influencerLifeId = parseInt(influencerLifeId, 10);
 
         if (isNaN(influencerLifeId)) {
@@ -137,7 +126,6 @@ const karmaScaler = async (influencerLifeId, chakraType) => {
             return { error: 'InfluencerLifeId must be a valid integer.' };
         }
 
-        // Retrieve the influencer details
         const influencerLife = await LifeAccount.findOne({ where: { lifeId: influencerLifeId } });
 
         if (!influencerLife) {
@@ -145,31 +133,27 @@ const karmaScaler = async (influencerLifeId, chakraType) => {
             return { error: 'Life account not found for the given influencerLifeId.' };
         }
 
-        const chakraProfiles = await ChakraProfile.findAll({
-            // Assuming karmaAmount is stored elsewhere or derived. This line may need adjustment.
-            // where: { chakra: chakraType, karmaAmount: { $lt: 0 } }
+        // Find all active negative karma interactions for this influencer
+        const negativeKarmaInteractions = await KarmaInteraction.findAll({
+            where: {
+                influencerLifeId: influencerLifeId,
+                karmaType: 'negative',
+                status: 'active',
+                negativeKarmaAccrued: { [Op.gt]: 0 } // Only consider interactions with actual accrued negative karma
+            }
         });
 
-        // Filter profiles older than 28 days manually
-        const currentDate = new Date(); // Corrected syntax
-        const filteredChakraProfiles = chakraProfiles.filter(profile => {
-            const createdAt = new Date(profile.createdAt); // Assuming ChakraProfile has a 'createdAt' timestamp
-            const diffInDays = (currentDate - createdAt) / (1000 * 3600 * 24);
-            return diffInDays >= 28;
-        });
+        if (negativeKarmaInteractions.length === 0) {
+            console.log(`No active negative karma interactions with accrued karma found for influencerLifeId: ${influencerLifeId}. No reminder sent.`);
+            return { message: 'No active negative karma to remind about.' };
+        }
 
-        // Basic check for missing environment variables before sending for karmaScaler
+        // Basic check for missing environment variables before sending
         if (!AHASEND_SENDER_EMAIL || !AHASEND_SENDER_NAME || !AHASEND_SMTP_USERNAME || !AHASEND_SMTP_PASSWORD) {
-            console.error('karmaScaler config error: Nodemailer (SMTP) configuration is missing in environment variables.', {
-                senderEmail: !!AHASEND_SENDER_EMAIL,
-                senderName: !!AHASEND_SENDER_NAME,
-                smtpUsername: !!AHASEND_SMTP_USERNAME,
-                smtpPassword: !!AHASEND_SMTP_PASSWORD
-            });
+            console.error('karmaScaler config error: Nodemailer (SMTP) configuration is missing in environment variables.');
             return { error: 'Email sender configuration is missing for karmaScaler.' };
         }
 
-        // Create Nodemailer transporter for karmaScaler
         const transporter = nodemailer.createTransport({
             host: 'send.ahasend.com',
             port: 587,
@@ -180,31 +164,50 @@ const karmaScaler = async (influencerLifeId, chakraType) => {
             }
         });
 
-        // Loop through all filtered chakra profiles and send the reminder emails
-        for (const profile of filteredChakraProfiles) {
-            const karmaAmount = 0; // Placeholder: Adjust this based on where karmaAmount comes from
+        let remindersSentCount = 0;
+        const twentyEightDaysAgo = new Date(Date.now() - (28 * 24 * 60 * 60 * 1000)); // Calculate 28 days ago
 
-            const message = `Reminder: you have ${Math.abs(karmaAmount)} outstanding karma related to ${profile.chakra}. Would you like to resolve it using the Moksha Protocol?`;
-            const body = 'Join now at https://moksha.money to resolve your negative karma.';
+        for (const interaction of negativeKarmaInteractions) {
+            const lastReminderSent = interaction.lastReminderSent; // This field needs to exist on KarmaInteraction model
 
-            const mailOptions = {
-                from: `"${AHASEND_SENDER_NAME}" <${AHASEND_SENDER_EMAIL}>`,
-                to: influencerLife.email,
-                subject: 'Moksha Protocol: Karma Reminder',
-                text: `${message}\n\n${body}`,
-            };
+            // Check if a reminder has been sent for this interaction, and if it was less than 28 days ago
+            const shouldSendReminder = !lastReminderSent || new Date(lastReminderSent) <= twentyEightDaysAgo;
 
-            console.log('Attempting to send karmaScaler email via Nodemailer:', {
-                from: mailOptions.from,
-                to: mailOptions.to,
-                subject: mailOptions.subject
-            });
+            if (shouldSendReminder) {
+                const emailSubject = `Moksha Protocol: Reminder for Outstanding Negative Karma`;
+                const message = `Dear ${capitalizeFirstLetter(influencerLife.firstName)}, you have ${interaction.negativeKarmaAccrued} units of outstanding negative karma related to your interaction concerning the ${interaction.affectedChakra} chakra (ID: ${interaction.id}).`;
+                const body = `Would you like to resolve this outstanding karma using the Moksha Protocol? Please sign in at https://moksha.money to view your ledger and take action.`;
 
-            await transporter.sendMail(mailOptions);
-            console.log('karmaScaler email sent successfully (Nodemailer).');
+                const mailOptions = {
+                    from: `"${AHASEND_SENDER_NAME}" <${AHASEND_SENDER_EMAIL}>`,
+                    to: influencerLife.email,
+                    subject: emailSubject,
+                    text: `${message}\n\n${body}`,
+                };
+
+                console.log(`Attempting to send karmaScaler email for interaction ID ${interaction.id} via Nodemailer:`, {
+                    from: mailOptions.from,
+                    to: mailOptions.to,
+                    subject: mailOptions.subject,
+                    negativeKarmaAccrued: interaction.negativeKarmaAccrued
+                });
+
+                await transporter.sendMail(mailOptions);
+                console.log(`karmaScaler email sent successfully for interaction ID ${interaction.id}.`);
+
+                // Update the lastReminderSent timestamp for this specific interaction
+                await interaction.update({ lastReminderSent: new Date() });
+                remindersSentCount++;
+            } else {
+                console.log(`Skipping reminder for interaction ID ${interaction.id}. Last reminder sent less than 28 days ago.`);
+            }
         }
 
-        return { message: 'Karma reminder emails sent successfully.' };
+        if (remindersSentCount === 0) {
+            return { message: 'No negative karma interactions were due for a reminder.' };
+        } else {
+            return { message: `Sent ${remindersSentCount} karma reminder email(s) successfully.` };
+        }
 
     } catch (error) {
         console.error('An error occurred in karmaScaler (Nodemailer):', error.message);

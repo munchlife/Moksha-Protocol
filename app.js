@@ -60,16 +60,25 @@ async function startServer() {
             }
         });
 
-        // Karma Scaler Cron Job (remains weekly)
-        cron.schedule('0 0 * * 0', async () => { // Runs at midnight UTC on Sundays
-            console.log('⏰ Weekly karma scaler job triggered at:', new Date().toISOString());
+        // Karma Scaler Cron Job
+        // Runs at midnight UTC on Sundays ('0 0 * * 0')
+        // OR, for testing/more frequent reminders if desired, uncomment a more frequent schedule:
+        // cron.schedule('0 * * * *', async () => { // Every hour (for testing or more frequent checks)
+        cron.schedule('0 0 * * 0', async () => { // Weekly: Midnight UTC on Sundays
+            console.log('⏰ Karma scaler job triggered at:', new Date().toISOString());
             try {
-                const influencerLifeId = 1; // Consider making this dynamic if needed
-                const chakraType = 'root'; // Consider making this dynamic if needed
-                await karmaScaler(influencerLifeId, chakraType);
-                console.log('✅ Weekly karma scaler job completed successfully.');
+                // Fetch all LifeAccount IDs to check for outstanding negative karma
+                const allLifeAccounts = await LifeAccount.findAll({ attributes: ['lifeId'] });
+                console.log(`Found ${allLifeAccounts.length} life accounts to check for karma reminders.`);
+
+                for (const account of allLifeAccounts) {
+                    console.log(`Checking karma for influencerLifeId: ${account.lifeId}`);
+                    // Call karmaScaler for each life account
+                    await karmaScaler(account.lifeId);
+                }
+                console.log('✅ Karma scaler job completed successfully for all relevant accounts.');
             } catch (err) {
-                console.error('❌ Error while scaling karma:', err.message, err.stack);
+                console.error('❌ Error while running karma scaler job:', err.message, err.stack);
             }
         });
 

@@ -63,6 +63,11 @@ const KarmaInteraction = sequelize.define('KarmaInteraction', {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW,
         allowNull: false
+    },
+    lastReminderSent: {
+        type: DataTypes.DATE, // Store as a Date/DateTime
+        allowNull: true,     // Can be null if no reminder has been sent yet
+        defaultValue: null
     }
 }, {
     // --- UPDATED INDEXES BLOCK ---
